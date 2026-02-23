@@ -1,6 +1,6 @@
 # MCP Tools Reference
 
-Anvil Core exposes 9 tools for managing your vault. Each tool is designed for a specific operation.
+Anvil exposes 9 tools for managing your vault. Each tool is designed for a specific operation.
 
 ## Tool Naming Convention
 

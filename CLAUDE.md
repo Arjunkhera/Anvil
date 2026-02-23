@@ -1,4 +1,4 @@
-# CLAUDE.md — anvil-core
+# CLAUDE.md — anvil
 
 > Project-specific AI rules and learned patterns. This file is read by the developer and tester skills before any work.
 

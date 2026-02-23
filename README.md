@@ -1,6 +1,6 @@
-# Anvil Core
+# Anvil
 
-Anvil Core is a TypeScript MCP (Model Context Protocol) server that transforms a markdown vault into a queryable, type-enforced note-taking system. It provides a complete knowledge management system with full-text search, relationships, and structured data.
+Anvil is a TypeScript MCP (Model Context Protocol) server that transforms a markdown vault into a queryable, type-enforced note-taking system. It provides a complete knowledge management system with full-text search, relationships, and structured data.
 
 ## Features
 
@@ -48,7 +48,7 @@ Anvil Core is a TypeScript MCP (Model Context Protocol) server that transforms a
 ## Project Structure
 
 ```
-anvil-core/
+anvil/
 ├── src/
 │   ├── index/          # SQLite indexing, FTS5, full-rebuild
 │   ├── registry/       # Type definitions & validation

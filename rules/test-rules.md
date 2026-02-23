@@ -1,4 +1,4 @@
-# Testing Rules — anvil-core
+# Testing Rules — anvil
 
 > Testing requirements, framework config, and coverage targets.
 

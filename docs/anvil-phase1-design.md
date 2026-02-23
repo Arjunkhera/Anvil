@@ -273,7 +273,7 @@ type: task
 title: "Implement user authentication"
 status: in-progress
 assignee: "[[Arjun Khera]]"       # reference field → must point to a person note
-project: "[[anvil-core]]"          # reference field → must point to a project note
+project: "[[anvil]]"          # reference field → must point to a project note
 ---
 ```
 
@@ -295,11 +295,11 @@ fields:
 | source_id | target_id | target_title | relation_type |
 |-----------|-----------|-------------|---------------|
 | a1b2c3d4-... | f5e6d7c8-... | Arjun Khera | assignee |
-| a1b2c3d4-... | b9a8c7d6-... | anvil-core | project |
+| a1b2c3d4-... | b9a8c7d6-... | anvil | project |
 
 **Validation:** On create/update via MCP tools, if `assignee: "[[Nonexistent Person]]"` is set and no `person`-type note matches, the system **warns but allows** the write. The target note may not exist yet (forward references are valid — you might create the person note later). The `target_id` is set to NULL and `target_title` stores the unresolved text. When the target note is eventually created, a background reconciliation pass resolves the reference.
 
-**Querying typed references:** These are the most powerful relationships for querying because they're structured. You can ask things like "all tasks assigned to Arjun" or "all stories in project anvil-core" and get precise results via index lookups.
+**Querying typed references:** These are the most powerful relationships for querying because they're structured. You can ask things like "all tasks assigned to Arjun" or "all stories in project anvil" and get precise results via index lookups.
 
 #### 2. Explicit Related Links (Frontmatter `related`)
 
@@ -316,7 +316,7 @@ date: 2026-02-24
 attendees: ["[[Arjun Khera]]", "[[Sarah Chen]]"]
 related:
   - "[[Implement user authentication]]"    # a task
-  - "[[anvil-core]]"                       # a project
+  - "[[anvil]]"                       # a project
   - "[[Auth Provider Comparison]]"         # a plain note
 ---
 ```
@@ -326,7 +326,7 @@ related:
 | source_id | target_id | target_title | relation_type |
 |-----------|-----------|-------------|---------------|
 | m1n2o3p4-... | a1b2c3d4-... | Implement user authentication | related |
-| m1n2o3p4-... | b9a8c7d6-... | anvil-core | related |
+| m1n2o3p4-... | b9a8c7d6-... | anvil | related |
 | m1n2o3p4-... | x7y8z9a0-... | Auth Provider Comparison | related |
 
 **When to use `related` vs typed references:** Use `related` for ad-hoc connections that don't fit a schema field. A meeting might reference tasks, projects, and research notes — `related` handles all of those without needing dedicated fields for each. Typed references (`assignee`, `project`) are for structured, queryable relationships that the type system enforces.
@@ -346,7 +346,7 @@ title: "Dev Journal"
 
 ## 2026-02-23 — Auth research
 
-Spent the morning looking into OAuth providers for [[anvil-core]].
+Spent the morning looking into OAuth providers for [[anvil]].
 [[Arjun Khera]] suggested we use [[Auth0]] since [[Document Service]]
 already has an integration. Need to check with [[Sarah Chen]] about
 the security requirements from the [[Q1 Security Audit]] findings.
@@ -358,7 +358,7 @@ Related task: [[Implement user authentication]]
 
 | source_id | target_id | target_title | relation_type |
 |-----------|-----------|-------------|---------------|
-| j5k6l7m8-... | b9a8c7d6-... | anvil-core | mentions |
+| j5k6l7m8-... | b9a8c7d6-... | anvil | mentions |
 | j5k6l7m8-... | f5e6d7c8-... | Arjun Khera | mentions |
 | j5k6l7m8-... | NULL | Auth0 | mentions |
 | j5k6l7m8-... | NULL | Document Service | mentions |
@@ -1024,7 +1024,7 @@ The core MCP server, type registry, SQLite index, and vault structure are **iden
 │           └──────────┬───────────────┘              │
 │                      │                              │
 │              ┌───────▼────────┐                     │
-│              │  Anvil Core    │                     │
+│              │  Anvil    │                     │
 │              │  (same as P1)  │                     │
 │              │                │                     │
 │              │  • Type registry                     │

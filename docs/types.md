@@ -1,6 +1,6 @@
 # Type Authoring Guide
 
-Anvil Core uses YAML-based type definitions to enforce structure and validation on notes. This guide explains how to create and customize types.
+Anvil uses YAML-based type definitions to enforce structure and validation on notes. This guide explains how to create and customize types.
 
 ## Type Definition Format
 
@@ -224,7 +224,7 @@ fields:
 
 ## Built-in Types
 
-Anvil Core provides several built-in types:
+Anvil provides several built-in types:
 
 ### Core (_core)
 Base type with common fields. Don't use directly.
@@ -494,7 +494,7 @@ When creating a note of this type without explicit content, the template body is
 
 ## Validation Rules
 
-Anvil Core validates notes against type schemas:
+Anvil validates notes against type schemas:
 
 1. **All required fields must be present**
 2. **Field values must match their type**
@@ -526,7 +526,7 @@ Error: Schema validation failed in bug.yaml
   - extends references non-existent type "task_base"
 ```
 
-Fix the issues and restart Anvil Core.
+Fix the issues and restart Anvil.
 
 ## Viewing Available Types
 

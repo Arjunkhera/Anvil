@@ -1,4 +1,4 @@
-# Development Rules — anvil-core
+# Development Rules — anvil
 
 > Project-specific coding standards. Inherits from `.sdlc/rules/global-rules.md`.
 

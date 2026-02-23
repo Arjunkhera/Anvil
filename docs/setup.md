@@ -1,6 +1,6 @@
-# Anvil Core Setup Guide
+# Anvil Setup Guide
 
-This guide walks you through installing Anvil Core and configuring it with Claude Desktop (or other MCP clients).
+This guide walks you through installing Anvil and configuring it with Claude Desktop (or other MCP clients).
 
 ## Prerequisites
 
@@ -11,10 +11,10 @@ This guide walks you through installing Anvil Core and configuring it with Claud
 
 ## Installation
 
-1. **Clone or download Anvil Core**:
+1. **Clone or download Anvil**:
    ```bash
    git clone <repository-url>
-   cd anvil-core
+   cd anvil
    ```
 
 2. **Install dependencies**:
@@ -38,13 +38,13 @@ This guide walks you through installing Anvil Core and configuring it with Claud
    - **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
    - **Linux**: `~/.config/Claude/claude_desktop_config.json`
 
-2. **Add Anvil Core to your MCP servers**:
+2. **Add Anvil to your MCP servers**:
    ```json
    {
      "mcpServers": {
        "anvil": {
          "command": "node",
-         "args": ["/path/to/anvil-core/dist/index.js"],
+         "args": ["/path/to/anvil/dist/index.js"],
          "env": {
            "VAULT_PATH": "/path/to/your/vault"
          }
@@ -54,7 +54,7 @@ This guide walks you through installing Anvil Core and configuring it with Claud
    ```
 
    Replace:
-   - `/path/to/anvil-core` with your actual Anvil Core directory
+   - `/path/to/anvil` with your actual Anvil directory
    - `/path/to/your/vault` with your markdown vault directory (create one if needed)
 
 3. **Restart Claude Desktop** for the changes to take effect.
@@ -63,7 +63,7 @@ This guide walks you through installing Anvil Core and configuring it with Claud
 
 If using another MCP client, configure it to run:
 ```bash
-node /path/to/anvil-core/dist/index.js
+node /path/to/anvil/dist/index.js
 ```
 
 With environment variable:
@@ -112,7 +112,7 @@ tags: []
 
 ## Using Built-in Types
 
-Anvil Core comes with several default types. You can create notes using any of them:
+Anvil comes with several default types. You can create notes using any of them:
 
 - **task**: Actionable items with status, priority, due date, effort
 - **project**: Larger initiatives with status and milestones
@@ -154,7 +154,7 @@ Anvil Core comes with several default types. You can create notes using any of t
        ## Actual Behavior
    ```
 
-2. Restart Anvil Core to load the new type.
+2. Restart Anvil to load the new type.
 
 3. Create a bug note:
    ```
@@ -237,7 +237,7 @@ Supported operations:
 Ensure you've run `npm run build` to compile TypeScript.
 
 ### "Type not found" error
-Make sure your type's `.yaml` file is in the vault's types directory and Anvil Core has been restarted.
+Make sure your type's `.yaml` file is in the vault's types directory and Anvil has been restarted.
 
 ### Notes not appearing in search
 The notes must:

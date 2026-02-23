@@ -1,4 +1,4 @@
-# Project: anvil-core
+# Project: anvil
 
 > Status: **active** | Created: 2026-02-22 | Program: [anvil-forge-vault](../../programs/anvil-forge-vault/PROGRAM.md)
 
