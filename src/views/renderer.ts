@@ -1,6 +1,6 @@
 // View data renderer — transforms raw query results into list/table/board JSON
 
-import Database from 'better-sqlite3';
+import type { AnvilDb } from '../index/sqlite.js';
 import type {
   ListView,
   TableView,
@@ -17,7 +17,7 @@ import type { TypeRegistry } from '../registry/type-registry.js';
  * Returns a Map<noteId, string[]>.
  */
 export function getTagsForNotes(
-  db: Database.Database,
+  db: AnvilDb,
   noteIds: string[]
 ): Map<string, string[]> {
   if (noteIds.length === 0) {
@@ -25,13 +25,10 @@ export function getTagsForNotes(
   }
 
   const placeholders = noteIds.map(() => '?').join(',');
-  const stmt = db.prepare(
-    `SELECT note_id, tag FROM note_tags WHERE note_id IN (${placeholders}) ORDER BY tag`
+  const rows = db.getAll<{ note_id: string; tag: string }>(
+    `SELECT note_id, tag FROM note_tags WHERE note_id IN (${placeholders}) ORDER BY tag`,
+    noteIds
   );
-  const rows = stmt.all(...noteIds) as Array<{
-    note_id: string;
-    tag: string;
-  }>;
 
   const tagsMap = new Map<string, string[]>();
   for (const row of rows) {
@@ -49,7 +46,7 @@ export function getTagsForNotes(
  * Maps each row to ListItem with tags fetched in batch.
  */
 export function renderList(
-  db: Database.Database,
+  db: AnvilDb,
   rows: any[],
   total: number,
   limit: number,
@@ -149,7 +146,7 @@ function formatTableValue(value: unknown): unknown {
  * Builds TableRow[] with values mapped from specified columns.
  */
 export function renderTable(
-  db: Database.Database,
+  db: AnvilDb,
   rows: any[],
   total: number,
   columns: string[],
@@ -218,7 +215,7 @@ export function renderTable(
  * Groups rows by groupBy field and organizes into columns.
  */
 export function renderBoard(
-  db: Database.Database,
+  db: AnvilDb,
   rows: any[],
   groupBy: string,
   enumValues?: string[]

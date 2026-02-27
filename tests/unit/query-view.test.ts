@@ -1,7 +1,7 @@
 // Unit tests for the anvil_query_view tool
 
 import { describe, it, expect, beforeEach } from 'vitest';
-import Database from 'better-sqlite3';
+import { AnvilDatabase, type AnvilDb } from '../../src/index/sqlite.js';
 import { handleQueryView } from '../../src/tools/query-view.js';
 import type { QueryViewInput } from '../../src/types/tools.js';
 import type { ToolContext } from '../../src/tools/create-note.js';
@@ -9,81 +9,6 @@ import { TypeRegistry } from '../../src/registry/type-registry.js';
 import { upsertNote } from '../../src/index/indexer.js';
 import type { Note } from '../../src/types/index.js';
 
-/**
- * Set up an in-memory SQLite database with the Anvil schema.
- */
-function setupDatabase(): Database.Database {
-  const db = new Database(':memory:');
-  db.pragma('journal_mode = WAL');
-  db.pragma('foreign_keys = ON');
-
-  // Create minimal schema for testing
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS types (
-      type_id TEXT PRIMARY KEY,
-      name TEXT NOT NULL,
-      schema_json TEXT,
-      template_json TEXT,
-      updated_at TEXT NOT NULL
-    );
-
-    CREATE TABLE IF NOT EXISTS notes (
-      note_id TEXT PRIMARY KEY,
-      type TEXT NOT NULL,
-      title TEXT NOT NULL,
-      description TEXT,
-      file_path TEXT,
-      created TEXT NOT NULL,
-      modified TEXT NOT NULL,
-      archived INTEGER DEFAULT 0,
-      pinned INTEGER DEFAULT 0,
-      scope_context TEXT,
-      scope_team TEXT,
-      scope_service TEXT,
-      status TEXT,
-      priority TEXT,
-      due TEXT,
-      effort REAL,
-      body_text TEXT,
-      FOREIGN KEY (type) REFERENCES types(type_id)
-    );
-
-    CREATE TABLE IF NOT EXISTS note_tags (
-      note_id TEXT NOT NULL,
-      tag TEXT NOT NULL,
-      PRIMARY KEY (note_id, tag),
-      FOREIGN KEY (note_id) REFERENCES notes(note_id)
-    );
-
-    CREATE TABLE IF NOT EXISTS relationships (
-      source_id TEXT NOT NULL,
-      target_id TEXT,
-      target_title TEXT NOT NULL,
-      relation_type TEXT NOT NULL,
-      PRIMARY KEY (source_id, target_id, target_title, relation_type),
-      FOREIGN KEY (source_id) REFERENCES notes(note_id)
-    );
-
-    CREATE VIRTUAL TABLE IF NOT EXISTS notes_fts USING fts5(
-      title, description, body_text, content=notes, content_rowid=rowid
-    );
-
-    CREATE TRIGGER IF NOT EXISTS notes_ai AFTER INSERT ON notes BEGIN
-      INSERT INTO notes_fts(rowid, title, description, body_text) VALUES (new.rowid, new.title, new.description, new.body_text);
-    END;
-
-    CREATE TRIGGER IF NOT EXISTS notes_ad AFTER DELETE ON notes BEGIN
-      INSERT INTO notes_fts(notes_fts, rowid, title, description, body_text) VALUES ('delete', old.rowid, old.title, old.description, old.body_text);
-    END;
-
-    CREATE TRIGGER IF NOT EXISTS notes_au AFTER UPDATE ON notes BEGIN
-      INSERT INTO notes_fts(notes_fts, rowid, title, description, body_text) VALUES ('delete', old.rowid, old.title, old.description, old.body_text);
-      INSERT INTO notes_fts(rowid, title, description, body_text) VALUES (new.rowid, new.title, new.description, new.body_text);
-    END;
-  `);
-
-  return db;
-}
 
 /**
  * Create a mock TypeRegistry with test types
@@ -167,23 +92,20 @@ function createMockRegistry(): TypeRegistry {
 }
 
 describe('Query View Tool', () => {
-  let db: Database.Database;
+  let db: AnvilDb;
+  let anvilDb: AnvilDatabase;
   let registry: TypeRegistry;
   let ctx: ToolContext;
 
-  beforeEach(() => {
-    db = setupDatabase();
+  beforeEach(async () => {
+    anvilDb = AnvilDatabase.create(':memory:');
+    db = anvilDb.raw;
     registry = createMockRegistry();
-
-    const mockAnvilDb = {
-      raw: db,
-      upsertType: () => {},
-    } as any;
 
     ctx = {
       vaultPath: '/test/vault',
       registry,
-      db: mockAnvilDb,
+      db: anvilDb,
     };
   });
 

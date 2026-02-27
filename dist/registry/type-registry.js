@@ -212,13 +212,23 @@ export class TypeRegistry {
         cached_at DATETIME DEFAULT CURRENT_TIMESTAMP
       );
     `);
-        const stmt = this.db.prepare(`
+        const insertSql = `
       INSERT OR REPLACE INTO types
       (id, name, description, icon, extends, fields_json, behaviors_json, template_json, own_fields_json, cached_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-    `);
+    `;
         for (const resolved of this.types.values()) {
-            stmt.run(resolved.id, resolved.name, resolved.description || null, resolved.icon || null, resolved.extends || null, JSON.stringify(resolved.fields), JSON.stringify(resolved.behaviors), resolved.template ? JSON.stringify(resolved.template) : null, JSON.stringify(resolved.ownFields));
+            this.db.run(insertSql, [
+                resolved.id,
+                resolved.name,
+                resolved.description || null,
+                resolved.icon || null,
+                resolved.extends || null,
+                JSON.stringify(resolved.fields),
+                JSON.stringify(resolved.behaviors),
+                resolved.template ? JSON.stringify(resolved.template) : null,
+                JSON.stringify(resolved.ownFields),
+            ]);
         }
     }
 }

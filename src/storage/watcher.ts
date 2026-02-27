@@ -1,8 +1,8 @@
 // Chokidar-based file watcher with debounce, batch processing, and startup catchup
 
 import * as path from 'node:path';
-import chokidar from 'chokidar';
-import Database from 'better-sqlite3';
+import chokidar, { type FSWatcher } from 'chokidar';
+import type { AnvilDb } from '../index/sqlite.js';
 import type { TypeRegistry } from '../registry/type-registry.js';
 import { readNote } from './file-store.js';
 import { scanVault } from './file-store.js';
@@ -23,7 +23,7 @@ type WatchEvent = {
  */
 export type WatcherOptions = {
   vaultPath: string;
-  db: Database.Database;
+  db: AnvilDb;
   registry: TypeRegistry;
   debounceMs?: number;
   ignorePatterns?: string[];
@@ -36,7 +36,7 @@ export type WatcherOptions = {
  * debounces events, processes in batches, and watches type definitions.
  */
 export class AnvilWatcher {
-  private watcher: chokidar.FSWatcher | null = null;
+  private watcher: FSWatcher | null = null;
   private pendingEvents = new Map<string, WatchEvent['type']>();
   private debounceTimer: NodeJS.Timeout | null = null;
   private batchCompletionCallbacks: Array<() => void> = [];
@@ -66,12 +66,12 @@ export class AnvilWatcher {
       },
     });
 
-    this.watcher.on('add', (filePath) => this.handleEvent('add', filePath));
-    this.watcher.on('change', (filePath) => this.handleEvent('change', filePath));
-    this.watcher.on('unlink', (filePath) => this.handleEvent('unlink', filePath));
+    this.watcher.on('add', (filePath: string) => this.handleEvent('add', filePath));
+    this.watcher.on('change', (filePath: string) => this.handleEvent('change', filePath));
+    this.watcher.on('unlink', (filePath: string) => this.handleEvent('unlink', filePath));
 
     if (this.options.onError) {
-      this.watcher.on('error', this.options.onError);
+      this.watcher.on('error', (err: unknown) => this.options.onError?.(err instanceof Error ? err : new Error(String(err))));
     }
 
     // Also watch .anvil/types/*.yaml for type definition changes
@@ -136,10 +136,10 @@ export class AnvilWatcher {
       try {
         if (eventType === 'unlink') {
           // Find note in DB by filePath and delete
-          const stmt = this.options.db.prepare(
-            'SELECT note_id FROM notes WHERE file_path = ?'
+          const row = this.options.db.getOne<{ note_id: string }>(
+            'SELECT note_id FROM notes WHERE file_path = ?',
+            [filePath]
           );
-          const row = stmt.get(filePath) as { note_id: string } | undefined;
           if (row) {
             deleteNote(this.options.db, row.note_id);
           }
@@ -201,10 +201,10 @@ export class AnvilWatcher {
     for (const [filePath] of indexedPaths) {
       if (!currentPaths.has(filePath)) {
         // File was deleted while watcher was offline
-        const stmt = this.options.db.prepare(
-          'SELECT note_id FROM notes WHERE file_path = ?'
+        const row = this.options.db.getOne<{ note_id: string }>(
+          'SELECT note_id FROM notes WHERE file_path = ?',
+          [filePath]
         );
-        const row = stmt.get(filePath) as { note_id: string } | undefined;
         if (row) deleteNote(this.options.db, row.note_id);
       }
     }

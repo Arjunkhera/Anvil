@@ -1,77 +1,57 @@
 // Unit tests for anvil_get_related tool
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import Database from 'better-sqlite3';
-import * as path from 'path';
-import * as fs from 'fs';
-import * as os from 'os';
+import { AnvilDatabase, type AnvilDb } from '../../src/index/sqlite.js';
 import { handleGetRelated, type RelatedResponse } from '../../src/tools/get-related.js';
 import { TypeRegistry } from '../../src/registry/type-registry.js';
 import type { ToolContext } from '../../src/tools/create-note.js';
-import { AnvilDatabase } from '../../src/index/sqlite.js';
 import { isAnvilError } from '../../src/types/error.js';
 
 describe('handleGetRelated', () => {
-  let tmpDir: string;
-  let db: Database.Database;
+  let db: AnvilDb;
   let anvilDb: AnvilDatabase;
   let ctx: ToolContext;
 
-  beforeEach(() => {
-    // Create temporary directory for test database
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'anvil-test-'));
-    const dbPath = path.join(tmpDir, 'test.db');
-
-    // Create AnvilDatabase and get raw db
-    anvilDb = new AnvilDatabase(dbPath);
+  beforeEach(async () => {
+    // Use in-memory database for tests
+    anvilDb = AnvilDatabase.create(':memory:');
     db = anvilDb.raw;
 
     // Create a simple registry
     const registry = new TypeRegistry();
 
     ctx = {
-      vaultPath: tmpDir,
+      vaultPath: '/tmp/test-vault',
       registry,
       db: anvilDb,
     };
 
     // Insert type definitions first (for foreign key constraints)
-    const insertType = db.prepare(`
-      INSERT INTO types (type_id, name, schema_json, updated_at)
-      VALUES (?, ?, ?, ?)
-    `);
-
-    insertType.run('task', 'Task', '{}', new Date().toISOString());
-    insertType.run('project', 'Project', '{}', new Date().toISOString());
+    const typesSql = `INSERT INTO types (type_id, name, schema_json, updated_at) VALUES (?, ?, ?, ?)`;
+    db.run(typesSql, ['task', 'Task', '{}', new Date().toISOString()]);
+    db.run(typesSql, ['project', 'Project', '{}', new Date().toISOString()]);
 
     // Insert test notes
-    const insertNote = db.prepare(`
-      INSERT INTO notes (note_id, type, title, file_path, created, modified)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `);
-
-    insertNote.run('note-1', 'task', 'Task 1', 'notes/task1.md', '2024-01-01T00:00:00Z', '2024-01-01T00:00:00Z');
-    insertNote.run('note-2', 'task', 'Task 2', 'notes/task2.md', '2024-01-01T00:00:00Z', '2024-01-01T00:00:00Z');
-    insertNote.run('note-3', 'project', 'My Project', 'notes/project.md', '2024-01-01T00:00:00Z', '2024-01-01T00:00:00Z');
-    insertNote.run('note-4', 'task', 'Unresolved Task', 'notes/task4.md', '2024-01-01T00:00:00Z', '2024-01-01T00:00:00Z');
+    const notesSql = `INSERT INTO notes (note_id, type, title, file_path, created, modified) VALUES (?, ?, ?, ?, ?, ?)`;
+    db.run(notesSql, ['note-1', 'task', 'Task 1', 'notes/task1.md', '2024-01-01T00:00:00Z', '2024-01-01T00:00:00Z']);
+    db.run(notesSql, ['note-2', 'task', 'Task 2', 'notes/task2.md', '2024-01-01T00:00:00Z', '2024-01-01T00:00:00Z']);
+    db.run(notesSql, ['note-3', 'project', 'My Project', 'notes/project.md', '2024-01-01T00:00:00Z', '2024-01-01T00:00:00Z']);
+    db.run(notesSql, ['note-4', 'task', 'Unresolved Task', 'notes/task4.md', '2024-01-01T00:00:00Z', '2024-01-01T00:00:00Z']);
   });
 
   afterEach(() => {
-    db.close();
+    anvilDb.close();
   });
 
   it('should return note with forward and reverse relationships', () => {
     // Add relationships: note-1 -> note-2 (project), note-1 -> note-3 (mentions)
-    const insertRel = db.prepare(`
-      INSERT INTO relationships (source_id, target_id, target_title, relation_type)
-      VALUES (?, ?, ?, ?)
-    `);
+    const relSql = `INSERT INTO relationships (source_id, target_id, target_title, relation_type) VALUES (?, ?, ?, ?)`;
 
-    insertRel.run('note-1', 'note-2', 'Task 2', 'project');
-    insertRel.run('note-1', 'note-3', 'My Project', 'mentions');
+    db.run(relSql, ['note-1', 'note-2', 'Task 2', 'project']);
+    db.run(relSql, ['note-1', 'note-3', 'My Project', 'mentions']);
 
     // Add reverse relationship: note-4 -> note-1 (assignee)
-    insertRel.run('note-4', 'note-1', 'Task 1', 'assignee');
+    db.run(relSql, ['note-4', 'note-1', 'Task 1', 'assignee']);
 
     const result = handleGetRelated({ noteId: 'note-1' }, ctx);
 
@@ -95,15 +75,12 @@ describe('handleGetRelated', () => {
   });
 
   it('should group relationships by relationType', () => {
-    const insertRel = db.prepare(`
-      INSERT INTO relationships (source_id, target_id, target_title, relation_type)
-      VALUES (?, ?, ?, ?)
-    `);
+    const relSql = `INSERT INTO relationships (source_id, target_id, target_title, relation_type) VALUES (?, ?, ?, ?)`;
 
     // Multiple forward relationships of different types
-    insertRel.run('note-1', 'note-2', 'Task 2', 'project');
-    insertRel.run('note-1', 'note-3', 'My Project', 'project');
-    insertRel.run('note-1', 'note-2', 'Task 2', 'depends_on');
+    db.run(relSql, ['note-1', 'note-2', 'Task 2', 'project']);
+    db.run(relSql, ['note-1', 'note-3', 'My Project', 'project']);
+    db.run(relSql, ['note-1', 'note-2', 'Task 2', 'depends_on']);
 
     const result = handleGetRelated({ noteId: 'note-1' }, ctx) as RelatedResponse;
 
@@ -113,13 +90,10 @@ describe('handleGetRelated', () => {
   });
 
   it('should include unresolved forward references (targetId = null)', () => {
-    const insertRel = db.prepare(`
-      INSERT INTO relationships (source_id, target_id, target_title, relation_type)
-      VALUES (?, ?, ?, ?)
-    `);
+    const relSql = `INSERT INTO relationships (source_id, target_id, target_title, relation_type) VALUES (?, ?, ?, ?)`;
 
     // Unresolved forward reference
-    insertRel.run('note-1', null, 'Nonexistent Note', 'mentions');
+    db.run(relSql, ['note-1', null, 'Nonexistent Note', 'mentions']);
 
     const result = handleGetRelated({ noteId: 'note-1' }, ctx) as RelatedResponse;
 
@@ -153,12 +127,9 @@ describe('handleGetRelated', () => {
   });
 
   it('should include note type and resolved status in forward relationships', () => {
-    const insertRel = db.prepare(`
-      INSERT INTO relationships (source_id, target_id, target_title, relation_type)
-      VALUES (?, ?, ?, ?)
-    `);
+    const relSql = `INSERT INTO relationships (source_id, target_id, target_title, relation_type) VALUES (?, ?, ?, ?)`;
 
-    insertRel.run('note-1', 'note-2', 'Task 2', 'depends_on');
+    db.run(relSql, ['note-1', 'note-2', 'Task 2', 'depends_on']);
 
     const result = handleGetRelated({ noteId: 'note-1' }, ctx) as RelatedResponse;
 
@@ -170,12 +141,9 @@ describe('handleGetRelated', () => {
   });
 
   it('should include note type and resolved status in reverse relationships', () => {
-    const insertRel = db.prepare(`
-      INSERT INTO relationships (source_id, target_id, target_title, relation_type)
-      VALUES (?, ?, ?, ?)
-    `);
+    const relSql = `INSERT INTO relationships (source_id, target_id, target_title, relation_type) VALUES (?, ?, ?, ?)`;
 
-    insertRel.run('note-4', 'note-1', 'Task 1', 'assignee');
+    db.run(relSql, ['note-4', 'note-1', 'Task 1', 'assignee']);
 
     const result = handleGetRelated({ noteId: 'note-1' }, ctx) as RelatedResponse;
 
@@ -187,14 +155,11 @@ describe('handleGetRelated', () => {
   });
 
   it('should handle mixed resolved and unresolved relationships', () => {
-    const insertRel = db.prepare(`
-      INSERT INTO relationships (source_id, target_id, target_title, relation_type)
-      VALUES (?, ?, ?, ?)
-    `);
+    const relSql = `INSERT INTO relationships (source_id, target_id, target_title, relation_type) VALUES (?, ?, ?, ?)`;
 
     // One resolved, one unresolved in same type
-    insertRel.run('note-1', 'note-2', 'Task 2', 'mentions');
-    insertRel.run('note-1', null, 'Future Task', 'mentions');
+    db.run(relSql, ['note-1', 'note-2', 'Task 2', 'mentions']);
+    db.run(relSql, ['note-1', null, 'Future Task', 'mentions']);
 
     const result = handleGetRelated({ noteId: 'note-1' }, ctx) as RelatedResponse;
 

@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import Database from 'better-sqlite3';
-import { AnvilDatabase } from '../../src/index/sqlite.js';
+import { AnvilDatabase, type AnvilDb } from '../../src/index/sqlite.js';
 import {
   upsertNote,
   deleteNote,
@@ -14,11 +13,10 @@ import { searchFts, queryNotes, combinedSearch } from '../../src/index/fts.js';
 import type { Note } from '../../src/types/index.js';
 
 describe('Indexer and Search', () => {
-  let db: Database.Database;
+  let db: AnvilDb;
 
-  beforeEach(() => {
-    // Use in-memory database for tests
-    const anvil = new AnvilDatabase(':memory:');
+  beforeEach(async () => {
+    const anvil = AnvilDatabase.create(':memory:');
     db = anvil.raw;
   });
 
@@ -41,8 +39,7 @@ describe('Indexer and Search', () => {
 
       upsertNote(db, note);
 
-      const stmt = db.prepare('SELECT * FROM notes WHERE note_id = ?');
-      const row = stmt.get('note-1');
+      const row = db.getOne<any>('SELECT * FROM notes WHERE note_id = ?', ['note-1']);
 
       expect(row).toBeDefined();
       expect(row.title).toBe('My First Task');
@@ -67,11 +64,13 @@ describe('Indexer and Search', () => {
 
       upsertNote(db, note);
 
-      const stmt = db.prepare('SELECT tag FROM note_tags WHERE note_id = ? ORDER BY tag');
-      const rows = stmt.all('note-2');
+      const rows = db.getAll<{ tag: string }>(
+        'SELECT tag FROM note_tags WHERE note_id = ? ORDER BY tag',
+        ['note-2']
+      );
 
       expect(rows).toHaveLength(3);
-      expect(rows.map((r: any) => r.tag)).toEqual(['important', 'meeting', 'work']);
+      expect(rows.map((r) => r.tag)).toEqual(['important', 'meeting', 'work']);
     });
 
     it('should extract body wiki-links as mentions relationships', () => {
@@ -90,10 +89,10 @@ describe('Indexer and Search', () => {
 
       upsertNote(db, note);
 
-      const stmt = db.prepare(
-        'SELECT target_title, relation_type FROM relationships WHERE source_id = ? ORDER BY target_title'
+      const rows = db.getAll<{ target_title: string; relation_type: string }>(
+        'SELECT target_title, relation_type FROM relationships WHERE source_id = ? ORDER BY target_title',
+        ['note-3']
       );
-      const rows = stmt.all('note-3');
 
       expect(rows).toHaveLength(2);
       expect(rows[0].relation_type).toBe('mentions');
@@ -116,14 +115,16 @@ describe('Indexer and Search', () => {
 
       upsertNote(db, note);
 
-      const tagStmt = db.prepare('SELECT COUNT(*) as count FROM note_tags WHERE note_id = ?');
-      const tagCount = (tagStmt.get('note-4') as any).count;
+      const tagCount = db.getOne<{ count: number }>(
+        'SELECT COUNT(*) as count FROM note_tags WHERE note_id = ?',
+        ['note-4']
+      )!.count;
       expect(tagCount).toBe(1); // Only one unique tag
 
-      const relStmt = db.prepare(
-        'SELECT COUNT(*) as count FROM relationships WHERE source_id = ? AND target_title = ? AND relation_type = ?'
-      );
-      const relCount = (relStmt.get('note-4', 'Link', 'mentions') as any).count;
+      const relCount = db.getOne<{ count: number }>(
+        'SELECT COUNT(*) as count FROM relationships WHERE source_id = ? AND target_title = ? AND relation_type = ?',
+        ['note-4', 'Link', 'mentions']
+      )!.count;
       expect(relCount).toBe(1); // Only one unique relationship
     });
 
@@ -145,10 +146,10 @@ describe('Indexer and Search', () => {
       upsertNote(db, noteA);
 
       // Check that target_id is NULL (forward reference)
-      let relStmt = db.prepare(
-        'SELECT target_id FROM relationships WHERE source_id = ? AND target_title = ?'
+      let rel = db.getOne<any>(
+        'SELECT target_id FROM relationships WHERE source_id = ? AND target_title = ?',
+        ['note-a', 'Future Note']
       );
-      let rel = relStmt.get('note-a', 'Future Note') as any;
       expect(rel.target_id).toBeNull();
 
       // Create "Future Note"
@@ -168,7 +169,10 @@ describe('Indexer and Search', () => {
       upsertNote(db, futureNote);
 
       // Check that target_id is now resolved
-      rel = relStmt.get('note-a', 'Future Note') as any;
+      rel = db.getOne<any>(
+        'SELECT target_id FROM relationships WHERE source_id = ? AND target_title = ?',
+        ['note-a', 'Future Note']
+      );
       expect(rel.target_id).toBe('future-note');
     });
 
@@ -188,10 +192,10 @@ describe('Indexer and Search', () => {
 
       upsertNote(db, note);
 
-      const ftsStmt = db.prepare(
-        'SELECT rowid FROM notes_fts WHERE title MATCH ? LIMIT 1'
+      const ftsRow = db.getOne<any>(
+        'SELECT rowid FROM notes_fts WHERE title MATCH ? LIMIT 1',
+        ['Searchable']
       );
-      const ftsRow = ftsStmt.get('Searchable');
       expect(ftsRow).toBeDefined();
     });
   });
@@ -214,24 +218,30 @@ describe('Indexer and Search', () => {
       upsertNote(db, note);
 
       // Verify note exists
-      let stmt = db.prepare('SELECT COUNT(*) as count FROM notes WHERE note_id = ?');
-      let count = (stmt.get('note-to-delete') as any).count;
+      let count = db.getOne<{ count: number }>(
+        'SELECT COUNT(*) as count FROM notes WHERE note_id = ?',
+        ['note-to-delete']
+      )!.count;
       expect(count).toBe(1);
 
       deleteNote(db, 'note-to-delete');
 
       // Verify note is deleted
-      count = (stmt.get('note-to-delete') as any).count;
+      count = db.getOne<{ count: number }>(
+        'SELECT COUNT(*) as count FROM notes WHERE note_id = ?',
+        ['note-to-delete']
+      )!.count;
       expect(count).toBe(0);
 
       // Verify tags are deleted (cascade)
-      stmt = db.prepare('SELECT COUNT(*) as count FROM note_tags WHERE note_id = ?');
-      count = (stmt.get('note-to-delete') as any).count;
+      count = db.getOne<{ count: number }>(
+        'SELECT COUNT(*) as count FROM note_tags WHERE note_id = ?',
+        ['note-to-delete']
+      )!.count;
       expect(count).toBe(0);
     });
 
     it('should preserve forward references by setting target_id to NULL', () => {
-      // Create target note
       const target: Note = {
         noteId: 'target-note',
         type: 'note',
@@ -245,7 +255,6 @@ describe('Indexer and Search', () => {
         fields: {},
       };
 
-      // Create source note linking to target
       const source: Note = {
         noteId: 'source-note',
         type: 'note',
@@ -263,17 +272,20 @@ describe('Indexer and Search', () => {
       upsertNote(db, source);
 
       // Verify relationship is resolved
-      let relStmt = db.prepare(
-        'SELECT target_id FROM relationships WHERE source_id = ? AND target_title = ?'
+      let rel = db.getOne<any>(
+        'SELECT target_id FROM relationships WHERE source_id = ? AND target_title = ?',
+        ['source-note', 'Target']
       );
-      let rel = relStmt.get('source-note', 'Target') as any;
       expect(rel.target_id).toBe('target-note');
 
       // Delete target
       deleteNote(db, 'target-note');
 
       // Verify relationship is now a forward reference
-      rel = relStmt.get('source-note', 'Target') as any;
+      rel = db.getOne<any>(
+        'SELECT target_id FROM relationships WHERE source_id = ? AND target_title = ?',
+        ['source-note', 'Target']
+      );
       expect(rel.target_id).toBeNull();
     });
   });
@@ -309,12 +321,13 @@ describe('Indexer and Search', () => {
 
       fullRebuild(db, notes);
 
-      const stmt = db.prepare('SELECT COUNT(*) as count FROM notes');
-      const count = (stmt.get() as any).count;
+      const count = db.getOne<{ count: number }>('SELECT COUNT(*) as count FROM notes')!.count;
       expect(count).toBe(2);
 
-      const tagStmt = db.prepare('SELECT COUNT(*) as count FROM note_tags WHERE tag = ?');
-      const tagCount = (tagStmt.get('rebuild') as any).count;
+      const tagCount = db.getOne<{ count: number }>(
+        'SELECT COUNT(*) as count FROM note_tags WHERE tag = ?',
+        ['rebuild']
+      )!.count;
       expect(tagCount).toBe(2);
     });
   });

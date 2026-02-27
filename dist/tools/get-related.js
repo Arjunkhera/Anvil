@@ -31,10 +31,7 @@ export function handleGetRelated(input, ctx) {
     const noteInfo = new Map();
     if (noteIdsToLookup.size > 0) {
         const placeholders = Array(noteIdsToLookup.size).fill('?').join(',');
-        const stmt = db.prepare(`
-      SELECT note_id, title, type FROM notes WHERE note_id IN (${placeholders})
-    `);
-        const rows = stmt.all(...Array.from(noteIdsToLookup));
+        const rows = db.getAll(`SELECT note_id, title, type FROM notes WHERE note_id IN (${placeholders})`, Array.from(noteIdsToLookup));
         for (const row of rows) {
             noteInfo.set(row.note_id, { title: row.title, type: row.type });
         }

@@ -10,8 +10,7 @@ function fetchTagsForNotes(db, noteIds) {
         return new Map();
     }
     const placeholders = noteIds.map(() => '?').join(',');
-    const stmt = db.prepare(`SELECT note_id, tag FROM note_tags WHERE note_id IN (${placeholders}) ORDER BY tag`);
-    const rows = stmt.all(...noteIds);
+    const rows = db.getAll(`SELECT note_id, tag FROM note_tags WHERE note_id IN (${placeholders}) ORDER BY tag`, noteIds);
     const tagsMap = new Map();
     for (const row of rows) {
         if (!tagsMap.has(row.note_id)) {
@@ -30,8 +29,7 @@ function fetchNoteMetadata(db, noteIds) {
         return new Map();
     }
     const placeholders = noteIds.map(() => '?').join(',');
-    const stmt = db.prepare(`SELECT note_id, type, title, status, priority, due, modified FROM notes WHERE note_id IN (${placeholders})`);
-    const rows = stmt.all(...noteIds);
+    const rows = db.getAll(`SELECT note_id, type, title, status, priority, due, modified FROM notes WHERE note_id IN (${placeholders})`, noteIds);
     const metadataMap = new Map(rows.map((row) => [
         row.note_id,
         {
@@ -136,13 +134,8 @@ export async function handleSearch(input, ctx) {
             }
             else {
                 // Try to count total FTS matches by running a count query
-                const countStmt = ctx.db.raw.prepare(`
-          SELECT COUNT(*) as count
-          FROM notes_fts
-          WHERE notes_fts MATCH ?
-        `);
-                const countRow = countStmt.get(input.query);
-                total = countRow.count;
+                const countRow = ctx.db.raw.getOne(`SELECT COUNT(*) as count FROM notes_fts WHERE notes_fts MATCH ?`, [input.query]);
+                total = countRow?.count ?? 0;
             }
             searchResults = ftsResults.map((r) => ({
                 noteId: r.noteId,

@@ -1,4 +1,4 @@
-import Database from 'better-sqlite3';
+import type { AnvilDb } from '../index/sqlite.js';
 import { ResolvedType } from '../types/index.js';
 import { AnvilError } from '../types/index.js';
 /** Service for loading and managing type definitions with inheritance resolution */
@@ -9,7 +9,7 @@ export declare class TypeRegistry {
     /**
      * Initialize the registry with an optional SQLite database for caching
      */
-    constructor(db?: Database.Database);
+    constructor(db?: AnvilDb);
     /**
      * Load all type definitions from a directory and resolve their inheritance chains.
      * Loads _core.yaml first (as the implicit root), then all other .yaml files.

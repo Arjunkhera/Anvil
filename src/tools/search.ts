@@ -1,6 +1,6 @@
 // Handler for anvil_search tool
 
-import Database from 'better-sqlite3';
+import type { AnvilDb } from '../index/sqlite.js';
 import type { SearchInput } from '../types/tools.js';
 import type { ToolContext } from './create-note.js';
 import type { SearchResponse, SearchResult } from '../types/view.js';
@@ -14,7 +14,7 @@ import { searchFts, queryNotes, combinedSearch } from '../index/fts.js';
  * Returns a Map<noteId, string[]>.
  */
 function fetchTagsForNotes(
-  db: Database.Database,
+  db: AnvilDb,
   noteIds: string[]
 ): Map<string, string[]> {
   if (noteIds.length === 0) {
@@ -22,13 +22,10 @@ function fetchTagsForNotes(
   }
 
   const placeholders = noteIds.map(() => '?').join(',');
-  const stmt = db.prepare(
-    `SELECT note_id, tag FROM note_tags WHERE note_id IN (${placeholders}) ORDER BY tag`
+  const rows = db.getAll<{ note_id: string; tag: string }>(
+    `SELECT note_id, tag FROM note_tags WHERE note_id IN (${placeholders}) ORDER BY tag`,
+    noteIds
   );
-  const rows = stmt.all(...noteIds) as Array<{
-    note_id: string;
-    tag: string;
-  }>;
 
   const tagsMap = new Map<string, string[]>();
   for (const row of rows) {
@@ -46,7 +43,7 @@ function fetchTagsForNotes(
  * Returns metadata keyed by noteId.
  */
 function fetchNoteMetadata(
-  db: Database.Database,
+  db: AnvilDb,
   noteIds: string[]
 ): Map<
   string,
@@ -64,10 +61,7 @@ function fetchNoteMetadata(
   }
 
   const placeholders = noteIds.map(() => '?').join(',');
-  const stmt = db.prepare(
-    `SELECT note_id, type, title, status, priority, due, modified FROM notes WHERE note_id IN (${placeholders})`
-  );
-  const rows = stmt.all(...noteIds) as Array<{
+  const rows = db.getAll<{
     note_id: string;
     type: string;
     title: string;
@@ -75,7 +69,10 @@ function fetchNoteMetadata(
     priority?: string | null;
     due?: string | null;
     modified: string;
-  }>;
+  }>(
+    `SELECT note_id, type, title, status, priority, due, modified FROM notes WHERE note_id IN (${placeholders})`,
+    noteIds
+  );
 
   const metadataMap = new Map(
     rows.map((row) => [
@@ -204,13 +201,11 @@ export async function handleSearch(
         total = offset + ftsResults.length;
       } else {
         // Try to count total FTS matches by running a count query
-        const countStmt = ctx.db.raw.prepare(`
-          SELECT COUNT(*) as count
-          FROM notes_fts
-          WHERE notes_fts MATCH ?
-        `);
-        const countRow = countStmt.get(input.query) as { count: number };
-        total = countRow.count;
+        const countRow = ctx.db.raw.getOne<{ count: number }>(
+          `SELECT COUNT(*) as count FROM notes_fts WHERE notes_fts MATCH ?`,
+          [input.query]
+        );
+        total = countRow?.count ?? 0;
       }
 
       searchResults = ftsResults.map((r) => ({

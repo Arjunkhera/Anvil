@@ -1,11 +1,11 @@
-import Database from 'better-sqlite3';
+import type { AnvilDb } from '../index/sqlite.js';
 import type { TypeRegistry } from '../registry/type-registry.js';
 /**
  * Options for configuring the AnvilWatcher
  */
 export type WatcherOptions = {
     vaultPath: string;
-    db: Database.Database;
+    db: AnvilDb;
     registry: TypeRegistry;
     debounceMs?: number;
     ignorePatterns?: string[];

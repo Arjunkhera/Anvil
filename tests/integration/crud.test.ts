@@ -34,7 +34,7 @@ describe('Integration: CRUD Operations', () => {
 
     // Create database using AnvilDatabase which initializes schema
     const dbPath = path.join(tempDir, 'test.db');
-    db = new AnvilDatabase(dbPath);
+    db = AnvilDatabase.create(dbPath);
 
     // Load type registry WITHOUT passing db to avoid caching issues
     registry = new TypeRegistry();

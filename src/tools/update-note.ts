@@ -30,9 +30,10 @@ export async function handleUpdateNote(
       );
     }
 
-    const noteRow = ctx.db.raw
-      .prepare(`SELECT file_path FROM notes WHERE note_id = ?`)
-      .get(input.noteId) as { file_path: string } | undefined;
+    const noteRow = ctx.db.raw.getOne<{ file_path: string }>(
+      `SELECT file_path FROM notes WHERE note_id = ?`,
+      [input.noteId]
+    );
 
     if (!noteRow) {
       return makeError(

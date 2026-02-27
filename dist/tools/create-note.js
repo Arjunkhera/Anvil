@@ -4,6 +4,7 @@ import { makeError, ERROR_CODES } from '../types/index.js';
 import { validateNote } from '../registry/validator.js';
 import { writeNote, generateFilePath } from '../storage/file-store.js';
 import { upsertNote } from '../index/indexer.js';
+import { join } from 'node:path';
 /**
  * Handle anvil_create_note request.
  * Creates a new note with auto-generated ID, applies type template,
@@ -77,7 +78,7 @@ export async function handleCreateNote(input, ctx) {
         }
         // 7. Generate file path (slug from title, flat strategy)
         const filePath = await generateFilePath(ctx.vaultPath, input.title, input.type, 'flat');
-        note.filePath = filePath;
+        note.filePath = join(ctx.vaultPath, filePath);
         // 8. Write note to filesystem
         try {
             await writeNote(note);

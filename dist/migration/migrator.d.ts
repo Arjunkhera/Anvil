@@ -1,4 +1,4 @@
-import type Database from 'better-sqlite3';
+import type { AnvilDb } from '../index/sqlite.js';
 import { type InferenceRule } from './type-inferrer.js';
 import { type MigrationReport } from './report.js';
 export type MigrationConfig = {
@@ -21,5 +21,5 @@ export type MigrationConfig = {
  * 8. Trigger fullRebuild if db provided and NOT dry-run
  * 9. Return report
  */
-export declare function migrate(config: MigrationConfig, db?: Database.Database): Promise<MigrationReport>;
+export declare function migrate(config: MigrationConfig, db?: AnvilDb): Promise<MigrationReport>;
 //# sourceMappingURL=migrator.d.ts.map

@@ -19,12 +19,16 @@ import { handleSearch } from './tools/search.js';
 import { handleQueryView } from './tools/query-view.js';
 import { handleListTypes } from './tools/list-types.js';
 import { handleGetRelated } from './tools/get-related.js';
+import { handleSyncPull } from './tools/sync-pull.js';
+import { handleSyncPush } from './tools/sync-push.js';
 import {
   CreateNoteInputSchema,
   GetNoteInputSchema,
   UpdateNoteInputSchema,
   SearchInputSchema,
   QueryViewInputSchema,
+  SyncPullInputSchema,
+  SyncPushInputSchema,
   CreateNoteOutputSchema,
   UpdateNoteOutputSchema,
 } from './types/tools.js';
@@ -56,7 +60,7 @@ async function main(): Promise<void> {
   }
 
   // Initialize AnvilDatabase
-  const db = new AnvilDatabase(paths.indexDb);
+  const db = AnvilDatabase.create(paths.indexDb);
 
   // Cache types in database
   for (const type of registry.getAllTypes()) {
@@ -347,6 +351,37 @@ async function main(): Promise<void> {
         required: ['noteId'],
       },
     },
+    {
+      name: 'anvil_sync_pull',
+      description: 'Pull latest changes from the remote Git repository and re-index changed files',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          remote: {
+            type: 'string',
+            description: 'Remote name (default: "origin")',
+          },
+          branch: {
+            type: 'string',
+            description: 'Branch to pull (default: current branch)',
+          },
+        },
+      },
+    },
+    {
+      name: 'anvil_sync_push',
+      description: 'Stage vault changes, commit, and push to the remote Git repository',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          message: {
+            type: 'string',
+            description: 'Commit message',
+          },
+        },
+        required: ['message'],
+      },
+    },
   ];
 
   // Register ListTools handler
@@ -514,6 +549,30 @@ async function main(): Promise<void> {
               },
             ],
           };
+        }
+
+        case 'anvil_sync_pull': {
+          const input = SyncPullInputSchema.parse(args);
+          const result = await handleSyncPull(input, ctx);
+          if (isAnvilError(result)) {
+            return {
+              content: [{ type: 'text', text: JSON.stringify(result) }],
+              isError: true,
+            };
+          }
+          return { content: [{ type: 'text', text: JSON.stringify(result) }] };
+        }
+
+        case 'anvil_sync_push': {
+          const input = SyncPushInputSchema.parse(args);
+          const result = await handleSyncPush(input, ctx);
+          if (isAnvilError(result)) {
+            return {
+              content: [{ type: 'text', text: JSON.stringify(result) }],
+              isError: true,
+            };
+          }
+          return { content: [{ type: 'text', text: JSON.stringify(result) }] };
         }
 
         default:

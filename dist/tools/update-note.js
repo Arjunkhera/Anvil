@@ -14,9 +14,7 @@ export async function handleUpdateNote(input, ctx) {
         if (!noteMetadata) {
             return makeError(ERROR_CODES.NOT_FOUND, `Note not found: ${input.noteId}`);
         }
-        const noteRow = ctx.db.raw
-            .prepare(`SELECT file_path FROM notes WHERE note_id = ?`)
-            .get(input.noteId);
+        const noteRow = ctx.db.raw.getOne(`SELECT file_path FROM notes WHERE note_id = ?`, [input.noteId]);
         if (!noteRow) {
             return makeError(ERROR_CODES.NOT_FOUND, `Note not found: ${input.noteId}`);
         }

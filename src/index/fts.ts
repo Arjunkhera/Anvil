@@ -1,4 +1,4 @@
-import Database from 'better-sqlite3';
+import type { AnvilDb } from './sqlite.js';
 import type { QueryFilter, SortOrder } from '../types/index.js';
 
 export interface SearchResult {
@@ -29,15 +29,15 @@ function sanitizeFtsQuery(query: string): string {
  * Returns ranked results with snippets
  */
 export function searchFts(
-  db: Database.Database,
+  db: AnvilDb,
   query: string,
   limit: number,
   offset: number
 ): SearchResult[] {
   const sanitized = sanitizeFtsQuery(query);
 
-  const stmt = db.prepare(`
-    SELECT
+  const rows = db.getAll<{ noteId: string; score: number; snippet: string }>(
+    `SELECT
       notes.note_id as noteId,
       bm25(notes_fts, 10.0, 5.0, 1.0) as score,
       snippet(notes_fts, -1, '<b>', '</b>', '...', 32) as snippet
@@ -45,21 +45,16 @@ export function searchFts(
     JOIN notes ON notes.rowid = notes_fts.rowid
     WHERE notes_fts MATCH ?
     ORDER BY score
-    LIMIT ? OFFSET ?
-  `);
-
-  const rows = stmt.all(sanitized, limit, offset) as Array<{
-    noteId: string;
-    score: number;
-    snippet: string;
-  }>;
+    LIMIT ? OFFSET ?`,
+    [sanitized, limit, offset]
+  );
 
   // BM25 in SQLite returns negative values where more negative = better
   // Reverse the sign and sort so better matches come first (positive, descending)
   return rows
     .map((row) => ({
       ...row,
-      score: -row.score,
+      score: -(row.score as unknown as number),
     }))
     .sort((a, b) => b.score - a.score);
 }
@@ -206,7 +201,7 @@ function buildQuerySql(filters: QueryFilter): {
  * Query notes with filters, sorting, and pagination
  */
 export function queryNotes(
-  db: Database.Database,
+  db: AnvilDb,
   filters: QueryFilter,
   orderBy: SortOrder,
   limit: number,
@@ -224,16 +219,14 @@ export function queryNotes(
 
   // Count total matching rows
   const countSql = `SELECT COUNT(*) as count FROM (${baseSql})`;
-  const countStmt = db.prepare(countSql);
-  const countResult = countStmt.get(...baseParams) as { count: number };
+  const countResult = db.getOne<{ count: number }>(countSql, baseParams);
 
   // Fetch paginated results
-  const stmt = db.prepare(orderedSql);
-  const rows = stmt.all(...baseParams, limit, offset);
+  const rows = db.getAll(orderedSql, [...baseParams, limit, offset]);
 
   return {
     rows,
-    total: countResult.count,
+    total: countResult?.count ?? 0,
   };
 }
 
@@ -256,7 +249,7 @@ function getRecencyBoost(modifiedISO: string): number {
  * Combined search: FTS + filter + recency boost
  */
 export function combinedSearch(
-  db: Database.Database,
+  db: AnvilDb,
   query: string,
   filters: QueryFilter,
   limit: number,
@@ -282,14 +275,10 @@ export function combinedSearch(
   const placeholders = ftsNoteIds.map(() => '?').join(',');
   const constrainedSql = filterBaseSql + `${whereMatch}notes.note_id IN (${placeholders})`;
 
-  const stmt = db.prepare(constrainedSql);
-  const filteredRows = stmt.all(
-    ...filterParams,
-    ...ftsNoteIds
-  ) as Array<{
-    note_id: string;
-    modified: string;
-  }>;
+  const filteredRows = db.getAll<{ note_id: string; modified: string }>(
+    constrainedSql,
+    [...filterParams, ...ftsNoteIds]
+  );
 
   if (filteredRows.length === 0) {
     return { results: [], total: 0 };

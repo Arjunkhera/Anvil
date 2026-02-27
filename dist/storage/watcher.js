@@ -45,7 +45,7 @@ export class AnvilWatcher {
         this.watcher.on('change', (filePath) => this.handleEvent('change', filePath));
         this.watcher.on('unlink', (filePath) => this.handleEvent('unlink', filePath));
         if (this.options.onError) {
-            this.watcher.on('error', this.options.onError);
+            this.watcher.on('error', (err) => this.options.onError?.(err instanceof Error ? err : new Error(String(err))));
         }
         // Also watch .anvil/types/*.yaml for type definition changes
         this.watchTypeDefinitions();
@@ -103,8 +103,7 @@ export class AnvilWatcher {
             try {
                 if (eventType === 'unlink') {
                     // Find note in DB by filePath and delete
-                    const stmt = this.options.db.prepare('SELECT note_id FROM notes WHERE file_path = ?');
-                    const row = stmt.get(filePath);
+                    const row = this.options.db.getOne('SELECT note_id FROM notes WHERE file_path = ?', [filePath]);
                     if (row) {
                         deleteNote(this.options.db, row.note_id);
                     }
@@ -159,8 +158,7 @@ export class AnvilWatcher {
         for (const [filePath] of indexedPaths) {
             if (!currentPaths.has(filePath)) {
                 // File was deleted while watcher was offline
-                const stmt = this.options.db.prepare('SELECT note_id FROM notes WHERE file_path = ?');
-                const row = stmt.get(filePath);
+                const row = this.options.db.getOne('SELECT note_id FROM notes WHERE file_path = ?', [filePath]);
                 if (row)
                     deleteNote(this.options.db, row.note_id);
             }

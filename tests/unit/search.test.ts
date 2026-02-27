@@ -1,113 +1,23 @@
 // Unit tests for the anvil_search tool
 
 import { describe, it, expect, beforeEach } from 'vitest';
-import Database from 'better-sqlite3';
+import { AnvilDatabase, type AnvilDb } from '../../src/index/sqlite.js';
 import { handleSearch } from '../../src/tools/search.js';
 import type { SearchInput } from '../../src/types/tools.js';
 import type { ToolContext } from '../../src/tools/create-note.js';
 import { TypeRegistry } from '../../src/registry/type-registry.js';
 import { upsertNote } from '../../src/index/indexer.js';
 import type { Note } from '../../src/types/index.js';
-import * as fs from 'node:fs';
-import * as path from 'node:path';
-
-/**
- * Set up an in-memory SQLite database with the Anvil schema.
- */
-function setupDatabase(): Database.Database {
-  const db = new Database(':memory:');
-  db.pragma('journal_mode = WAL');
-  db.pragma('foreign_keys = ON');
-
-  // Read and execute the migration SQL
-  const migrationPath = path.join(
-    process.cwd(),
-    'src/index/migrations/001_initial.sql'
-  );
-  if (!fs.existsSync(migrationPath)) {
-    // Create minimal schema for testing if migration doesn't exist
-    db.exec(`
-      CREATE TABLE IF NOT EXISTS types (
-        type_id TEXT PRIMARY KEY,
-        name TEXT NOT NULL,
-        schema_json TEXT,
-        template_json TEXT,
-        updated_at TEXT NOT NULL
-      );
-
-      CREATE TABLE IF NOT EXISTS notes (
-        note_id TEXT PRIMARY KEY,
-        type TEXT NOT NULL,
-        title TEXT NOT NULL,
-        description TEXT,
-        file_path TEXT,
-        created TEXT NOT NULL,
-        modified TEXT NOT NULL,
-        archived INTEGER DEFAULT 0,
-        pinned INTEGER DEFAULT 0,
-        scope_context TEXT,
-        scope_team TEXT,
-        scope_service TEXT,
-        status TEXT,
-        priority TEXT,
-        due TEXT,
-        effort REAL,
-        body_text TEXT,
-        FOREIGN KEY (type) REFERENCES types(type_id)
-      );
-
-      CREATE TABLE IF NOT EXISTS note_tags (
-        note_id TEXT NOT NULL,
-        tag TEXT NOT NULL,
-        PRIMARY KEY (note_id, tag),
-        FOREIGN KEY (note_id) REFERENCES notes(note_id)
-      );
-
-      CREATE TABLE IF NOT EXISTS relationships (
-        source_id TEXT NOT NULL,
-        target_id TEXT,
-        target_title TEXT NOT NULL,
-        relation_type TEXT NOT NULL,
-        PRIMARY KEY (source_id, target_id, target_title, relation_type),
-        FOREIGN KEY (source_id) REFERENCES notes(note_id)
-      );
-
-      CREATE VIRTUAL TABLE IF NOT EXISTS notes_fts USING fts5(
-        title, body, content=notes, content_rowid=rowid
-      );
-
-      CREATE TRIGGER IF NOT EXISTS notes_ai AFTER INSERT ON notes BEGIN
-        INSERT INTO notes_fts(rowid, title, body) VALUES (new.rowid, new.title, new.body_text);
-      END;
-
-      CREATE TRIGGER IF NOT EXISTS notes_ad AFTER DELETE ON notes BEGIN
-        INSERT INTO notes_fts(notes_fts, rowid, title, body) VALUES ('delete', old.rowid, old.title, old.body_text);
-      END;
-
-      CREATE TRIGGER IF NOT EXISTS notes_au AFTER UPDATE ON notes BEGIN
-        INSERT INTO notes_fts(notes_fts, rowid, title, body) VALUES ('delete', old.rowid, old.title, old.body_text);
-        INSERT INTO notes_fts(rowid, title, body) VALUES (new.rowid, new.title, new.body_text);
-      END;
-    `);
-  } else {
-    const sql = fs.readFileSync(migrationPath, 'utf-8');
-    db.exec(sql);
-  }
-
-  return db;
-}
 
 /**
  * Create test notes in the database.
  */
-function createTestNotes(db: Database.Database): void {
+function createTestNotes(db: AnvilDb): void {
   // Create a test type
-  const typeStmt = db.prepare(`
-    INSERT OR REPLACE INTO types (type_id, name, schema_json, updated_at)
-    VALUES (?, ?, ?, ?)
-  `);
-  typeStmt.run('task', 'Task', '{}', new Date().toISOString());
-  typeStmt.run('note', 'Note', '{}', new Date().toISOString());
+  db.run(`INSERT OR REPLACE INTO types (type_id, name, schema_json, updated_at) VALUES (?, ?, ?, ?)`,
+    ['task', 'Task', '{}', new Date().toISOString()]);
+  db.run(`INSERT OR REPLACE INTO types (type_id, name, schema_json, updated_at) VALUES (?, ?, ?, ?)`,
+    ['note', 'Note', '{}', new Date().toISOString()]);
 
   const now = new Date().toISOString();
   const tomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0];
@@ -186,19 +96,19 @@ function createTestNotes(db: Database.Database): void {
 }
 
 describe('anvil_search', () => {
-  let db: Database.Database;
+  let anvilDb: AnvilDatabase;
   let ctx: ToolContext;
 
-  beforeEach(() => {
-    db = setupDatabase();
-    createTestNotes(db);
+  beforeEach(async () => {
+    anvilDb = AnvilDatabase.create(':memory:');
+    createTestNotes(anvilDb.raw);
 
     // Create a minimal tool context
     const registry = new TypeRegistry();
     ctx = {
       vaultPath: '/vault',
       registry,
-      db: { raw: db } as any,
+      db: anvilDb,
     };
   });
 

@@ -6,69 +6,14 @@ import { join } from 'path';
 import { mkdtemp } from 'fs';
 import { tmpdir } from 'os';
 import { promisify } from 'util';
-import Database from 'better-sqlite3';
 
+import { AnvilDatabase, type AnvilDb } from '../../src/index/sqlite.js';
 import { AnvilWatcher, type WatcherOptions } from '../../src/storage/watcher.js';
 import { upsertNote, getAllNotePaths } from '../../src/index/indexer.js';
 import { TypeRegistry } from '../../src/registry/type-registry.js';
 import type { Note } from '../../src/types/note.js';
 
 const mkdtempAsync = promisify(mkdtemp);
-
-// Helper to create a test database
-function createTestDb(): Database.Database {
-  const db = new Database(':memory:');
-  
-  // Create minimal schema
-  db.exec(`
-    CREATE TABLE notes (
-      note_id TEXT PRIMARY KEY,
-      type TEXT NOT NULL,
-      title TEXT NOT NULL,
-      description TEXT,
-      file_path TEXT UNIQUE,
-      created TEXT NOT NULL,
-      modified TEXT NOT NULL,
-      archived INTEGER DEFAULT 0,
-      pinned INTEGER DEFAULT 0,
-      scope_context TEXT,
-      scope_team TEXT,
-      scope_service TEXT,
-      status TEXT,
-      priority TEXT,
-      due TEXT,
-      effort REAL,
-      body_text TEXT
-    );
-    
-    CREATE TABLE note_tags (
-      note_id TEXT NOT NULL,
-      tag TEXT NOT NULL,
-      PRIMARY KEY (note_id, tag),
-      FOREIGN KEY (note_id) REFERENCES notes(note_id)
-    );
-    
-    CREATE TABLE relationships (
-      source_id TEXT NOT NULL,
-      target_id TEXT,
-      target_title TEXT NOT NULL,
-      relation_type TEXT NOT NULL,
-      PRIMARY KEY (source_id, target_title, relation_type),
-      FOREIGN KEY (source_id) REFERENCES notes(note_id)
-    );
-    
-    CREATE TABLE types (
-      type_id TEXT PRIMARY KEY,
-      name TEXT NOT NULL,
-      schema_json TEXT,
-      updated_at TEXT
-    );
-    
-    CREATE VIRTUAL TABLE notes_fts USING fts5(title, description, body_text, content=notes, content_rowid=rowid);
-  `);
-  
-  return db;
-}
 
 // Helper to create a test note with absolute path
 function createTestNote(filePath: string, noteId: string = 'note-1'): Note {
@@ -88,18 +33,20 @@ function createTestNote(filePath: string, noteId: string = 'note-1'): Note {
 
 describe('AnvilWatcher', () => {
   let tmpDir: string;
-  let db: Database.Database;
+  let db: AnvilDb;
+  let anvilDb: AnvilDatabase;
   let registry: TypeRegistry;
 
   beforeEach(async () => {
     tmpDir = await mkdtempAsync(join(tmpdir(), 'anvil-watcher-test-'));
-    db = createTestDb();
-    registry = new TypeRegistry(db);
+    anvilDb = AnvilDatabase.create(':memory:');
+    db = anvilDb.raw;
+    registry = new TypeRegistry();
   });
 
   afterEach(async () => {
     try {
-      db.close();
+      anvilDb.close();
       await fs.rm(tmpDir, { recursive: true, force: true });
     } catch (err) {
       // Ignore cleanup errors
@@ -165,7 +112,7 @@ describe('AnvilWatcher', () => {
       };
 
       const watcher = new AnvilWatcher(options);
-      
+
       // Mock the processBatch method to avoid file I/O
       let batchProcessed = false;
       (watcher as any).processBatch = async () => {
@@ -226,7 +173,7 @@ describe('AnvilWatcher', () => {
       };
 
       const watcher = new AnvilWatcher(options);
-      
+
       let batchCount = 0;
       (watcher as any).processBatch = async () => {
         batchCount++;
@@ -263,7 +210,7 @@ describe('AnvilWatcher', () => {
       };
 
       const watcher = new AnvilWatcher(options);
-      
+
       let batchedFiles: string[] = [];
       (watcher as any).processBatch = async function() {
         batchedFiles = Array.from((this as any).pendingEvents.keys());

@@ -18,8 +18,7 @@ function sanitizeFtsQuery(query) {
  */
 export function searchFts(db, query, limit, offset) {
     const sanitized = sanitizeFtsQuery(query);
-    const stmt = db.prepare(`
-    SELECT
+    const rows = db.getAll(`SELECT
       notes.note_id as noteId,
       bm25(notes_fts, 10.0, 5.0, 1.0) as score,
       snippet(notes_fts, -1, '<b>', '</b>', '...', 32) as snippet
@@ -27,9 +26,7 @@ export function searchFts(db, query, limit, offset) {
     JOIN notes ON notes.rowid = notes_fts.rowid
     WHERE notes_fts MATCH ?
     ORDER BY score
-    LIMIT ? OFFSET ?
-  `);
-    const rows = stmt.all(sanitized, limit, offset);
+    LIMIT ? OFFSET ?`, [sanitized, limit, offset]);
     // BM25 in SQLite returns negative values where more negative = better
     // Reverse the sign and sort so better matches come first (positive, descending)
     return rows
@@ -171,14 +168,12 @@ export function queryNotes(db, filters, orderBy, limit, offset) {
     const orderedSql = baseSql + ` ORDER BY ${orderField} ${orderDir} LIMIT ? OFFSET ?`;
     // Count total matching rows
     const countSql = `SELECT COUNT(*) as count FROM (${baseSql})`;
-    const countStmt = db.prepare(countSql);
-    const countResult = countStmt.get(...baseParams);
+    const countResult = db.getOne(countSql, baseParams);
     // Fetch paginated results
-    const stmt = db.prepare(orderedSql);
-    const rows = stmt.all(...baseParams, limit, offset);
+    const rows = db.getAll(orderedSql, [...baseParams, limit, offset]);
     return {
         rows,
-        total: countResult.count,
+        total: countResult?.count ?? 0,
     };
 }
 /**
@@ -210,8 +205,7 @@ export function combinedSearch(db, query, filters, limit, offset) {
     const whereMatch = filterBaseSql.includes('WHERE') ? ' AND ' : ' WHERE ';
     const placeholders = ftsNoteIds.map(() => '?').join(',');
     const constrainedSql = filterBaseSql + `${whereMatch}notes.note_id IN (${placeholders})`;
-    const stmt = db.prepare(constrainedSql);
-    const filteredRows = stmt.all(...filterParams, ...ftsNoteIds);
+    const filteredRows = db.getAll(constrainedSql, [...filterParams, ...ftsNoteIds]);
     if (filteredRows.length === 0) {
         return { results: [], total: 0 };
     }

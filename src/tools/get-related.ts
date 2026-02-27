@@ -1,6 +1,5 @@
 // Handler for anvil_get_related tool
 
-import Database from 'better-sqlite3';
 import type { ToolContext } from './create-note.js';
 import type { AnvilError } from '../types/error.js';
 import { makeError, ERROR_CODES } from '../types/error.js';
@@ -61,14 +60,10 @@ export function handleGetRelated(
   const noteInfo = new Map<string, { title: string; type: string }>();
   if (noteIdsToLookup.size > 0) {
     const placeholders = Array(noteIdsToLookup.size).fill('?').join(',');
-    const stmt = db.prepare(`
-      SELECT note_id, title, type FROM notes WHERE note_id IN (${placeholders})
-    `);
-    const rows = stmt.all(...Array.from(noteIdsToLookup)) as Array<{
-      note_id: string;
-      title: string;
-      type: string;
-    }>;
+    const rows = db.getAll<{ note_id: string; title: string; type: string }>(
+      `SELECT note_id, title, type FROM notes WHERE note_id IN (${placeholders})`,
+      Array.from(noteIdsToLookup)
+    );
     for (const row of rows) {
       noteInfo.set(row.note_id, { title: row.title, type: row.type });
     }

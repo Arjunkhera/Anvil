@@ -3,7 +3,7 @@
 import { promises as fs } from 'fs';
 import { join, dirname } from 'path';
 import { v4 as uuidv4 } from 'uuid';
-import type Database from 'better-sqlite3';
+import type { AnvilDb } from '../index/sqlite.js';
 import { parseFrontmatter, serializeFrontmatter } from '../storage/frontmatter.js';
 import { scanVault, readNote } from '../storage/file-store.js';
 import { fullRebuild } from '../index/indexer.js';
@@ -40,7 +40,7 @@ export type MigrationConfig = {
  */
 export async function migrate(
   config: MigrationConfig,
-  db?: Database.Database,
+  db?: AnvilDb,
 ): Promise<MigrationReport> {
   const report = createEmptyReport();
 

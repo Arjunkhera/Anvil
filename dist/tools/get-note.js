@@ -16,9 +16,7 @@ export async function handleGetNote(input, ctx) {
         // We need the filePath. If it's not in metadata, we can't proceed.
         // The indexer stores filePath in the notes table, but we need to get it.
         // Let's query for it directly.
-        const noteRow = ctx.db.raw
-            .prepare(`SELECT file_path FROM notes WHERE note_id = ?`)
-            .get(input.noteId);
+        const noteRow = ctx.db.raw.getOne(`SELECT file_path FROM notes WHERE note_id = ?`, [input.noteId]);
         if (!noteRow) {
             return makeError(ERROR_CODES.NOT_FOUND, `Note not found: ${input.noteId}`);
         }

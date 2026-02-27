@@ -4,7 +4,7 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import yaml from 'js-yaml';
 import { z } from 'zod';
-import Database from 'better-sqlite3';
+import type { AnvilDb } from '../index/sqlite.js';
 import {
   TypeDefinition,
   ResolvedType,
@@ -72,12 +72,12 @@ const TypeDefinitionSchema: z.ZodType<TypeDefinition> = z.object({
 export class TypeRegistry {
   private types = new Map<string, ResolvedType>();
   private definitions = new Map<string, TypeDefinition>();
-  private db?: Database.Database;
+  private db?: AnvilDb;
 
   /**
    * Initialize the registry with an optional SQLite database for caching
    */
-  constructor(db?: Database.Database) {
+  constructor(db?: AnvilDb) {
     this.db = db;
   }
 
@@ -268,14 +268,14 @@ export class TypeRegistry {
       );
     `);
 
-    const stmt = this.db.prepare(`
+    const insertSql = `
       INSERT OR REPLACE INTO types
       (id, name, description, icon, extends, fields_json, behaviors_json, template_json, own_fields_json, cached_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-    `);
+    `;
 
     for (const resolved of this.types.values()) {
-      stmt.run(
+      this.db.run(insertSql, [
         resolved.id,
         resolved.name,
         resolved.description || null,
@@ -285,7 +285,7 @@ export class TypeRegistry {
         JSON.stringify(resolved.behaviors),
         resolved.template ? JSON.stringify(resolved.template) : null,
         JSON.stringify(resolved.ownFields),
-      );
+      ]);
     }
   }
 }

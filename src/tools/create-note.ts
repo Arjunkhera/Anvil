@@ -12,6 +12,7 @@ import { makeError, ERROR_CODES, isAnvilError } from '../types/index.js';
 import { validateNote } from '../registry/validator.js';
 import { readNote, writeNote, generateFilePath } from '../storage/file-store.js';
 import { upsertNote } from '../index/indexer.js';
+import { join } from 'node:path';
 import type { TypeRegistry } from '../registry/type-registry.js';
 import type { AnvilDatabase } from '../index/sqlite.js';
 import type { AnvilWatcher } from '../storage/watcher.js';
@@ -123,7 +124,7 @@ export async function handleCreateNote(
       input.type,
       'flat'
     );
-    note.filePath = filePath;
+    note.filePath = join(ctx.vaultPath, filePath);
 
     // 8. Write note to filesystem
     try {

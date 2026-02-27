@@ -8,8 +8,7 @@ export function getTagsForNotes(db, noteIds) {
         return new Map();
     }
     const placeholders = noteIds.map(() => '?').join(',');
-    const stmt = db.prepare(`SELECT note_id, tag FROM note_tags WHERE note_id IN (${placeholders}) ORDER BY tag`);
-    const rows = stmt.all(...noteIds);
+    const rows = db.getAll(`SELECT note_id, tag FROM note_tags WHERE note_id IN (${placeholders}) ORDER BY tag`, noteIds);
     const tagsMap = new Map();
     for (const row of rows) {
         if (!tagsMap.has(row.note_id)) {

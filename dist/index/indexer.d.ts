@@ -1,4 +1,4 @@
-import Database from 'better-sqlite3';
+import type { AnvilDb } from './sqlite.js';
 import type { Note, NoteMetadata, Relationship } from '../types/index.js';
 /**
  * Upsert a note into the database within a single transaction.
@@ -9,37 +9,37 @@ import type { Note, NoteMetadata, Relationship } from '../types/index.js';
  * 4. Update notes_fts virtual table
  * 5. Forward reference reconciliation
  */
-export declare function upsertNote(db: Database.Database, note: Note): void;
+export declare function upsertNote(db: AnvilDb, note: Note): void;
 /**
  * Delete a note and update related data.
  * 1. Set target_id = NULL in relationships where target_id = noteId (preserve forward ref)
  * 2. Delete from notes (cascade deletes tags and relationships where source_id = noteId)
  * 3. Delete from notes_fts
  */
-export declare function deleteNote(db: Database.Database, noteId: string): void;
+export declare function deleteNote(db: AnvilDb, noteId: string): void;
 /**
  * Full rebuild within a single transaction.
  * 1. DELETE all notes (cascade deletes tags, relationships)
  * 2. DELETE from notes_fts (virtual table cleanup)
  * 3. Upsert all notes one by one
  */
-export declare function fullRebuild(db: Database.Database, notes: Note[]): void;
+export declare function fullRebuild(db: AnvilDb, notes: Note[]): void;
 /**
  * Get a note's metadata by ID
  */
-export declare function getNote(db: Database.Database, noteId: string): NoteMetadata | null;
+export declare function getNote(db: AnvilDb, noteId: string): NoteMetadata | null;
 /**
  * Get forward relationships (relationships where this note is the source)
  */
-export declare function getForwardRelationships(db: Database.Database, noteId: string): Relationship[];
+export declare function getForwardRelationships(db: AnvilDb, noteId: string): Relationship[];
 /**
  * Get reverse relationships (relationships where this note is the target)
  */
-export declare function getReverseRelationships(db: Database.Database, noteId: string): Relationship[];
+export declare function getReverseRelationships(db: AnvilDb, noteId: string): Relationship[];
 /**
  * Get all indexed note paths and their metadata for startup catchup
  */
-export declare function getAllNotePaths(db: Database.Database): Array<{
+export declare function getAllNotePaths(db: AnvilDb): Array<{
     noteId: string;
     filePath: string;
     modified: string;
