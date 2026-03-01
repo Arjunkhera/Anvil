@@ -46,6 +46,11 @@ export function loadServerConfig(cliArgs) {
     if (envHost) {
         config.host = envHost;
     }
+    // Check environment variable for additional type dirs
+    const envAdditionalTypeDirs = process.env.ANVIL_ADDITIONAL_TYPE_DIRS;
+    if (envAdditionalTypeDirs) {
+        config.additional_type_dirs = envAdditionalTypeDirs.split(',').map((dir) => dir.trim());
+    }
     // Check CLI args
     if (cliArgs) {
         const vaultIndex = cliArgs.indexOf('--vault');
@@ -113,6 +118,7 @@ export function loadVaultConfig(vaultPath) {
 export function vaultPaths(vaultPath) {
     return {
         typesDir: path.join(vaultPath, '.anvil', 'types'),
+        pluginsDir: path.join(vaultPath, '.anvil', 'plugins'),
         localDir: path.join(vaultPath, '.anvil', '.local'),
         indexDb: path.join(vaultPath, '.anvil', '.local', 'index.db'),
         stateJson: path.join(vaultPath, '.anvil', '.local', 'state.json'),

@@ -5,17 +5,24 @@ import { AnvilError } from '../types/index.js';
 export declare class TypeRegistry {
     private types;
     private definitions;
+    private definitionSources;
     private db?;
     /**
      * Initialize the registry with an optional SQLite database for caching
      */
     constructor(db?: AnvilDb);
     /**
-     * Load all type definitions from a directory and resolve their inheritance chains.
-     * Loads _core.yaml first (as the implicit root), then all other .yaml files.
-     * Validates structure with zod, detects circular inheritance, enforces max depth.
+     * Load all type definitions from multiple directories and resolve their inheritance chains.
+     * Accepts either a single string (for backward compat) or an array of directory paths.
+     * First directory has highest precedence. Skips missing directories with debug-level logging.
      */
-    loadTypes(typesDir: string): Promise<void | AnvilError>;
+    loadTypes(typesDirsInput: string | string[]): Promise<void | AnvilError>;
+    /**
+     * Load type definitions from a single directory.
+     * Returns error only for IO errors (not just missing directories).
+     * Precedence rule: if a type ID is already loaded, skip it and log a warning.
+     */
+    private loadTypesFromDir;
     /**
      * Get a resolved type by ID
      */

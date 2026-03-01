@@ -10,6 +10,7 @@ import {
   ResolvedType,
   FieldDefinition,
   TypeBehaviors,
+  TypeSource,
 } from '../types/index.js';
 import { AnvilError, ERROR_CODES, makeError } from '../types/index.js';
 
@@ -72,6 +73,7 @@ const TypeDefinitionSchema: z.ZodType<TypeDefinition> = z.object({
 export class TypeRegistry {
   private types = new Map<string, ResolvedType>();
   private definitions = new Map<string, TypeDefinition>();
+  private definitionSources = new Map<string, TypeSource>(); // Track source (directory + file + plugin) for each type
   private db?: AnvilDb;
 
   /**
@@ -82,14 +84,65 @@ export class TypeRegistry {
   }
 
   /**
-   * Load all type definitions from a directory and resolve their inheritance chains.
-   * Loads _core.yaml first (as the implicit root), then all other .yaml files.
-   * Validates structure with zod, detects circular inheritance, enforces max depth.
+   * Load all type definitions from multiple directories and resolve their inheritance chains.
+   * Accepts either a single string (for backward compat) or an array of directory paths.
+   * First directory has highest precedence. Skips missing directories with debug-level logging.
    */
-  async loadTypes(typesDir: string): Promise<void | AnvilError> {
+  async loadTypes(typesDirsInput: string | string[]): Promise<void | AnvilError> {
+    // Normalize input: support both single string and array
+    const typesDirs = Array.isArray(typesDirsInput) ? typesDirsInput : [typesDirsInput];
+
+    // Load types from each directory in order (first wins on conflict)
+    for (const typesDir of typesDirs) {
+      const loadErr = await this.loadTypesFromDir(typesDir);
+      if (loadErr && 'error' in loadErr) {
+        // Only return error if it's not a "directory not found" error
+        // For missing directories, we skip with a debug log instead
+        if (loadErr.code !== ERROR_CODES.IO_ERROR || !loadErr.message.includes('Directory not found')) {
+          return loadErr;
+        }
+        // Debug log for missing directory (silent skip)
+        console.debug(`Type directory not found, skipping: ${typesDir}`);
+      }
+    }
+
+    // After all directories processed, check that _core was loaded
+    if (!this.definitions.has('_core')) {
+      return makeError(
+        ERROR_CODES.SCHEMA_ERROR,
+        `Required type _core not found in any type directory`,
+      );
+    }
+
+    // Resolve inheritance for all types
+    for (const [typeId, definition] of this.definitions) {
+      const resolved = this.resolveType(definition);
+      if ('error' in resolved) {
+        return resolved;
+      }
+      this.types.set(typeId, resolved);
+    }
+
+    // Cache in SQLite if available
+    if (this.db) {
+      await this.cacheTypesToDb();
+    }
+  }
+
+  /**
+   * Load type definitions from a single directory.
+   * Returns error only for IO errors (not just missing directories).
+   * Precedence rule: if a type ID is already loaded, skip it and log a warning.
+   */
+  private async loadTypesFromDir(typesDir: string): Promise<void | AnvilError> {
     try {
       const files = await fs.readdir(typesDir);
       const yamlFiles = files.filter((f) => f.endsWith('.yaml'));
+
+      // Empty directory is OK, just skip silently
+      if (yamlFiles.length === 0) {
+        return;
+      }
 
       // Load _core.yaml first
       const coreIndex = yamlFiles.indexOf('_core.yaml');
@@ -108,15 +161,30 @@ export class TypeRegistry {
         try {
           const definition = TypeDefinitionSchema.parse(raw);
 
-          // Check for duplicate type IDs
+          // Check for conflict: type ID already loaded from different directory
           if (this.definitions.has(definition.id)) {
-            return makeError(
-              ERROR_CODES.DUPLICATE_ID,
-              `Duplicate type ID: ${definition.id}`,
-            );
+            const existingSource = this.definitionSources.get(definition.id);
+            if (existingSource) {
+              const existingDisplay = existingSource.plugin
+                ? `${existingSource.directory}/${existingSource.file} (plugin: ${existingSource.plugin})`
+                : `${existingSource.directory}/${existingSource.file}`;
+              const newDisplay = `${typesDir}/${file}`;
+              console.warn(
+                `Type conflict: '${definition.id}' defined in both ${newDisplay} and ${existingDisplay}. Using ${existingDisplay} (higher precedence).`,
+              );
+            }
+            continue;
           }
 
+          // Record source for this type
+          const source: TypeSource = {
+            directory: typesDir,
+            file: file,
+            plugin: this.extractPluginName(typesDir),
+          };
+
           this.definitions.set(definition.id, definition);
+          this.definitionSources.set(definition.id, source);
         } catch (err) {
           if (err instanceof z.ZodError) {
             return makeError(
@@ -127,26 +195,14 @@ export class TypeRegistry {
           throw err;
         }
       }
-
-      // Resolve inheritance for all types
-      for (const [typeId, definition] of this.definitions) {
-        const resolved = this.resolveType(definition);
-        if ('error' in resolved) {
-          return resolved;
-        }
-        this.types.set(typeId, resolved);
-      }
-
-      // Cache in SQLite if available
-      if (this.db) {
-        await this.cacheTypesToDb();
-      }
     } catch (err) {
       if (err instanceof Error) {
-        return makeError(
-          ERROR_CODES.IO_ERROR,
-          `Failed to load types from ${typesDir}: ${err.message}`,
-        );
+        // Check if it's a "directory not found" error (ENOENT)
+        const isNotFound = (err as unknown as Record<string, unknown>)['code'] === 'ENOENT';
+        const errMsg = isNotFound
+          ? `Directory not found: ${typesDir}`
+          : `Failed to load types from ${typesDir}: ${err.message}`;
+        return makeError(ERROR_CODES.IO_ERROR, errMsg);
       }
       throw err;
     }
@@ -234,6 +290,12 @@ export class TypeRegistry {
       }
     }
 
+    // Get source metadata for this type
+    const source = this.definitionSources.get(definition.id) || {
+      directory: '',
+      file: '',
+    };
+
     return {
       id: definition.id,
       name: definition.name,
@@ -244,7 +306,72 @@ export class TypeRegistry {
       behaviors: definition.behaviors || {},
       template: definition.template,
       ownFields,
+      source,
     };
+  }
+
+  /**
+   * Extract plugin name from a directory path.
+   * If the path matches /.anvil/plugins/{name}/types, returns {name}.
+   * Otherwise returns undefined.
+   */
+  private extractPluginName(dir: string): string | undefined {
+    const match = dir.match(/\.anvil[/\\]plugins[/\\]([^/\\]+)[/\\]types$/);
+    return match ? match[1] : undefined;
+  }
+
+  /**
+   * Get all types from a specific source directory or plugin name.
+   * dirOrPlugin can be either an absolute directory path or a plugin name.
+   */
+  getTypesBySource(dirOrPlugin: string): ResolvedType[] {
+    return this.getAllTypes().filter((type) => {
+      if (!type.source) return false;
+      // Check if it matches the directory path
+      if (type.source.directory === dirOrPlugin) return true;
+      // Check if it matches the plugin name
+      if (type.source.plugin === dirOrPlugin) return true;
+      return false;
+    });
+  }
+
+  /**
+   * Convenience method: get all types contributed by a specific plugin.
+   * pluginName should be the name under .anvil/plugins/{name}/types/
+   */
+  getTypesByPlugin(pluginName: string): ResolvedType[] {
+    return this.getAllTypes().filter((type) => type.source?.plugin === pluginName);
+  }
+
+  /**
+   * Reload all type definitions from the given directories.
+   * Clears the current state and performs a fresh load.
+   * On failure, the previous state is preserved.
+   * Returns undefined on success, or an AnvilError on failure.
+   */
+  async reload(dirs: string[]): Promise<void | AnvilError> {
+    // Snapshot current state
+    const previousTypes = new Map(this.types);
+    const previousDefinitions = new Map(this.definitions);
+    const previousSources = new Map(this.definitionSources);
+
+    // Clear and reload
+    this.types.clear();
+    this.definitions.clear();
+    this.definitionSources.clear();
+
+    const result = await this.loadTypes(dirs);
+
+    if (result && 'error' in result) {
+      // Restore previous state on failure
+      this.types = previousTypes;
+      this.definitions = previousDefinitions;
+      this.definitionSources = previousSources;
+      console.error(`Type reload failed, keeping previous types: ${result.message}`);
+      return result;
+    }
+
+    console.info(`Type registry reloaded successfully. ${this.types.size} types loaded.`);
   }
 
   /**

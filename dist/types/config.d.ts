@@ -17,6 +17,7 @@ export type ServerConfig = {
     port?: number;
     host?: string;
     log_level: 'debug' | 'info' | 'warn' | 'error';
+    additional_type_dirs?: string[];
 };
 /** Default ignore patterns for the file watcher and vault scanner */
 export declare const DEFAULT_IGNORE_PATTERNS: string[];

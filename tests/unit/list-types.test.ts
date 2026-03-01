@@ -43,6 +43,7 @@ describe('handleListTypes', () => {
       },
       behaviors: {},
       ownFields: {},
+      source: { directory: tmpDir, file: '_core.yaml' },
     };
 
     // Add task type (extends _core)
@@ -64,6 +65,7 @@ describe('handleListTypes', () => {
         due: { type: 'date', required: false },
         effort: { type: 'number', required: false, integer: true, min: 1 },
       },
+      source: { directory: tmpDir, file: 'task.yaml' },
     };
 
     // Add story type (extends task)
@@ -79,6 +81,7 @@ describe('handleListTypes', () => {
       ownFields: {
         epic: { type: 'reference', required: false, ref_type: 'epic' },
       },
+      source: { directory: tmpDir, file: 'story.yaml' },
     };
 
     // Add journal type (with append_only behavior)
@@ -90,6 +93,7 @@ describe('handleListTypes', () => {
       },
       behaviors: { append_only: true },
       ownFields: {},
+      source: { directory: tmpDir, file: 'journal.yaml' },
     };
 
     // Add note type (simple type)
@@ -105,6 +109,7 @@ describe('handleListTypes', () => {
       ownFields: {
         description: { type: 'text', required: false },
       },
+      source: { directory: tmpDir, file: 'note.yaml' },
     };
 
     (registry as any).types.set('_core', coreType);
@@ -240,5 +245,26 @@ describe('handleListTypes', () => {
     const coreType = result.types.find((t) => t.typeId === '_core');
 
     expect(coreType!.extends).toBeNull();
+  });
+
+  it('should include source info in returned TypeInfo', () => {
+    const result = handleListTypes(ctx);
+    const noteType = result.types.find((t) => t.typeId === 'note');
+
+    expect(noteType).toBeDefined();
+    expect(noteType!.source).toBeDefined();
+    expect(noteType!.source.directory).toBe(tmpDir);
+    expect(noteType!.source.file).toBe('note.yaml');
+  });
+
+  it('should include plugin name in source when applicable', () => {
+    const result = handleListTypes(ctx);
+
+    // All mock types should have source info
+    for (const typeInfo of result.types) {
+      expect(typeInfo.source).toBeDefined();
+      expect(typeInfo.source.directory).toBeDefined();
+      expect(typeInfo.source.file).toBeDefined();
+    }
   });
 });

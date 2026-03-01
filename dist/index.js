@@ -2,6 +2,7 @@
 // Anvil MCP Server entry point
 // Initializes core components and starts the MCP server with the configured transport
 import { loadServerConfig, vaultPaths } from './config.js';
+import { discoverPluginTypeDirs } from './registry/plugin-discovery.js';
 import { TypeRegistry } from './registry/type-registry.js';
 import { AnvilDatabase } from './index/sqlite.js';
 import { createMcpServer } from './mcp/server.js';
@@ -23,9 +24,13 @@ async function main() {
     }
     // Get vault paths
     const paths = vaultPaths(config.vault_path);
+    // Discover plugin type directories
+    const pluginTypeDirs = await discoverPluginTypeDirs(config.vault_path);
+    // Build directory array: vault types first (highest precedence), then plugin types (alphabetical), then additional dirs
+    const typesDirs = [paths.typesDir, ...pluginTypeDirs, ...(config.additional_type_dirs || [])];
     // Initialize TypeRegistry
     const registry = new TypeRegistry();
-    const typeLoadErr = await registry.loadTypes(paths.typesDir);
+    const typeLoadErr = await registry.loadTypes(typesDirs);
     if (typeLoadErr && 'error' in typeLoadErr) {
         console.error(`Failed to load types: ${typeLoadErr.message}`);
         process.exit(1);

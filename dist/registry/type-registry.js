@@ -58,6 +58,7 @@ const TypeDefinitionSchema = z.object({
 export class TypeRegistry {
     types = new Map();
     definitions = new Map();
+    definitionSources = new Map(); // Track which directory each type came from
     db;
     /**
      * Initialize the registry with an optional SQLite database for caching
@@ -66,14 +67,56 @@ export class TypeRegistry {
         this.db = db;
     }
     /**
-     * Load all type definitions from a directory and resolve their inheritance chains.
-     * Loads _core.yaml first (as the implicit root), then all other .yaml files.
-     * Validates structure with zod, detects circular inheritance, enforces max depth.
+     * Load all type definitions from multiple directories and resolve their inheritance chains.
+     * Accepts either a single string (for backward compat) or an array of directory paths.
+     * First directory has highest precedence. Skips missing directories with debug-level logging.
      */
-    async loadTypes(typesDir) {
+    async loadTypes(typesDirsInput) {
+        // Normalize input: support both single string and array
+        const typesDirs = Array.isArray(typesDirsInput) ? typesDirsInput : [typesDirsInput];
+        // Load types from each directory in order (first wins on conflict)
+        for (const typesDir of typesDirs) {
+            const loadErr = await this.loadTypesFromDir(typesDir);
+            if (loadErr && 'error' in loadErr) {
+                // Only return error if it's not a "directory not found" error
+                // For missing directories, we skip with a debug log instead
+                if (loadErr.code !== ERROR_CODES.IO_ERROR || !loadErr.message.includes('Directory not found')) {
+                    return loadErr;
+                }
+                // Debug log for missing directory (silent skip)
+                console.debug(`Type directory not found, skipping: ${typesDir}`);
+            }
+        }
+        // After all directories processed, check that _core was loaded
+        if (!this.definitions.has('_core')) {
+            return makeError(ERROR_CODES.SCHEMA_ERROR, `Required type _core not found in any type directory`);
+        }
+        // Resolve inheritance for all types
+        for (const [typeId, definition] of this.definitions) {
+            const resolved = this.resolveType(definition);
+            if ('error' in resolved) {
+                return resolved;
+            }
+            this.types.set(typeId, resolved);
+        }
+        // Cache in SQLite if available
+        if (this.db) {
+            await this.cacheTypesToDb();
+        }
+    }
+    /**
+     * Load type definitions from a single directory.
+     * Returns error only for IO errors (not just missing directories).
+     * Precedence rule: if a type ID is already loaded, skip it and log a warning.
+     */
+    async loadTypesFromDir(typesDir) {
         try {
             const files = await fs.readdir(typesDir);
             const yamlFiles = files.filter((f) => f.endsWith('.yaml'));
+            // Empty directory is OK, just skip silently
+            if (yamlFiles.length === 0) {
+                return;
+            }
             // Load _core.yaml first
             const coreIndex = yamlFiles.indexOf('_core.yaml');
             if (coreIndex !== -1) {
@@ -88,11 +131,14 @@ export class TypeRegistry {
                 // Validate structure with zod
                 try {
                     const definition = TypeDefinitionSchema.parse(raw);
-                    // Check for duplicate type IDs
+                    // Check for conflict: type ID already loaded from different directory
                     if (this.definitions.has(definition.id)) {
-                        return makeError(ERROR_CODES.DUPLICATE_ID, `Duplicate type ID: ${definition.id}`);
+                        const previousSource = this.definitionSources.get(definition.id);
+                        console.warn(`Type '${definition.id}' from ${typesDir} ignored — already loaded from ${previousSource}`);
+                        continue;
                     }
                     this.definitions.set(definition.id, definition);
+                    this.definitionSources.set(definition.id, typesDir);
                 }
                 catch (err) {
                     if (err instanceof z.ZodError) {
@@ -101,22 +147,15 @@ export class TypeRegistry {
                     throw err;
                 }
             }
-            // Resolve inheritance for all types
-            for (const [typeId, definition] of this.definitions) {
-                const resolved = this.resolveType(definition);
-                if ('error' in resolved) {
-                    return resolved;
-                }
-                this.types.set(typeId, resolved);
-            }
-            // Cache in SQLite if available
-            if (this.db) {
-                await this.cacheTypesToDb();
-            }
         }
         catch (err) {
             if (err instanceof Error) {
-                return makeError(ERROR_CODES.IO_ERROR, `Failed to load types from ${typesDir}: ${err.message}`);
+                // Check if it's a "directory not found" error (ENOENT)
+                const isNotFound = err['code'] === 'ENOENT';
+                const errMsg = isNotFound
+                    ? `Directory not found: ${typesDir}`
+                    : `Failed to load types from ${typesDir}: ${err.message}`;
+                return makeError(ERROR_CODES.IO_ERROR, errMsg);
             }
             throw err;
         }

@@ -13,6 +13,7 @@ export declare function loadVaultConfig(vaultPath: string): VaultConfig;
  */
 export declare function vaultPaths(vaultPath: string): {
     typesDir: string;
+    pluginsDir: string;
     localDir: string;
     indexDb: string;
     stateJson: string;

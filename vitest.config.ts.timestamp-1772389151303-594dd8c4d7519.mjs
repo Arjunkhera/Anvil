@@ -1,0 +1,21 @@
+// vitest.config.ts
+import { defineConfig } from "file:///sessions/gracious-beautiful-thompson/mnt/Repositories/Anvil/node_modules/vitest/dist/config.js";
+var vitest_config_default = defineConfig({
+  test: {
+    globals: true,
+    environment: "node",
+    include: ["tests/**/*.test.ts"],
+    coverage: {
+      include: ["src/**"],
+      exclude: ["src/index.ts"]
+    },
+    testTimeout: 1e4
+  },
+  resolve: {
+    conditions: ["node"]
+  }
+});
+export {
+  vitest_config_default as default
+};
+//# sourceMappingURL=data:application/json;base64,ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidml0ZXN0LmNvbmZpZy50cyJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiY29uc3QgX192aXRlX2luamVjdGVkX29yaWdpbmFsX2Rpcm5hbWUgPSBcIi9zZXNzaW9ucy9ncmFjaW91cy1iZWF1dGlmdWwtdGhvbXBzb24vbW50L1JlcG9zaXRvcmllcy9BbnZpbFwiO2NvbnN0IF9fdml0ZV9pbmplY3RlZF9vcmlnaW5hbF9maWxlbmFtZSA9IFwiL3Nlc3Npb25zL2dyYWNpb3VzLWJlYXV0aWZ1bC10aG9tcHNvbi9tbnQvUmVwb3NpdG9yaWVzL0FudmlsL3ZpdGVzdC5jb25maWcudHNcIjtjb25zdCBfX3ZpdGVfaW5qZWN0ZWRfb3JpZ2luYWxfaW1wb3J0X21ldGFfdXJsID0gXCJmaWxlOi8vL3Nlc3Npb25zL2dyYWNpb3VzLWJlYXV0aWZ1bC10aG9tcHNvbi9tbnQvUmVwb3NpdG9yaWVzL0FudmlsL3ZpdGVzdC5jb25maWcudHNcIjtpbXBvcnQgeyBkZWZpbmVDb25maWcgfSBmcm9tICd2aXRlc3QvY29uZmlnJztcblxuZXhwb3J0IGRlZmF1bHQgZGVmaW5lQ29uZmlnKHtcbiAgdGVzdDoge1xuICAgIGdsb2JhbHM6IHRydWUsXG4gICAgZW52aXJvbm1lbnQ6ICdub2RlJyxcbiAgICBpbmNsdWRlOiBbJ3Rlc3RzLyoqLyoudGVzdC50cyddLFxuICAgIGNvdmVyYWdlOiB7XG4gICAgICBpbmNsdWRlOiBbJ3NyYy8qKiddLFxuICAgICAgZXhjbHVkZTogWydzcmMvaW5kZXgudHMnXSxcbiAgICB9LFxuICAgIHRlc3RUaW1lb3V0OiAxMDAwMCxcbiAgfSxcbiAgcmVzb2x2ZToge1xuICAgIGNvbmRpdGlvbnM6IFsnbm9kZSddLFxuICB9LFxufSk7XG4iXSwKICAibWFwcGluZ3MiOiAiO0FBQTBXLFNBQVMsb0JBQW9CO0FBRXZZLElBQU8sd0JBQVEsYUFBYTtBQUFBLEVBQzFCLE1BQU07QUFBQSxJQUNKLFNBQVM7QUFBQSxJQUNULGFBQWE7QUFBQSxJQUNiLFNBQVMsQ0FBQyxvQkFBb0I7QUFBQSxJQUM5QixVQUFVO0FBQUEsTUFDUixTQUFTLENBQUMsUUFBUTtBQUFBLE1BQ2xCLFNBQVMsQ0FBQyxjQUFjO0FBQUEsSUFDMUI7QUFBQSxJQUNBLGFBQWE7QUFBQSxFQUNmO0FBQUEsRUFDQSxTQUFTO0FBQUEsSUFDUCxZQUFZLENBQUMsTUFBTTtBQUFBLEVBQ3JCO0FBQ0YsQ0FBQzsiLAogICJuYW1lcyI6IFtdCn0K

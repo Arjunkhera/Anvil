@@ -74,6 +74,13 @@ export type TypeDefinition = {
   template?: TypeTemplate;
 };
 
+/** Metadata tracking the source of a type definition */
+export type TypeSource = {
+  directory: string;   // absolute path to the types/ directory
+  file: string;        // filename, e.g. "work-item.yaml"
+  plugin?: string;     // plugin name if from .anvil/plugins/{name}/types/
+};
+
 /**
  * A resolved type has its full field set already merged with parent fields.
  * Consumers never need to walk the inheritance chain.
@@ -90,6 +97,8 @@ export type ResolvedType = {
   template?: TypeTemplate;
   /** Only fields defined directly on this type (not inherited) */
   ownFields: Record<string, FieldDefinition>;
+  /** Source tracking: which directory and file this type came from */
+  source: TypeSource;
 };
 
 export type ValidationMode = 'strict' | 'warn';

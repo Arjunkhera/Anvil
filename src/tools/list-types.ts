@@ -1,7 +1,7 @@
 // Handler for anvil_list_types tool
 
 import type { ToolContext } from './create-note.js';
-import type { ResolvedType, FieldDefinition } from '../types/index.js';
+import type { ResolvedType, FieldDefinition, TypeSource } from '../types/index.js';
 
 export type FieldInfo = {
   name: string;
@@ -24,6 +24,7 @@ export type TypeInfo = {
   extends: string | null;
   fields: FieldInfo[];
   behaviors: { append_only: boolean };
+  source: TypeSource;
 };
 
 const CORE_FIELD_ORDER = ['noteId', 'type', 'title', 'created', 'modified', 'tags', 'related', 'scope'];
@@ -54,6 +55,10 @@ export function handleListTypes(ctx: ToolContext): { types: TypeInfo[] } {
       fields: fieldInfos,
       behaviors: {
         append_only: type.behaviors.append_only ?? false,
+      },
+      source: type.source || {
+        directory: '',
+        file: '',
       },
     };
   });
