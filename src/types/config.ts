@@ -18,6 +18,7 @@ export type ServerConfig = {
   vault_path: string;
   transport: 'stdio' | 'http';
   port?: number;
+  host?: string;
   log_level: 'debug' | 'info' | 'warn' | 'error';
 };
 

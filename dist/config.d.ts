@@ -1,7 +1,7 @@
 import type { ServerConfig, VaultConfig } from './types/index.js';
 /**
  * Load server config from CLI args, env var, or ~/.anvil/server.yaml.
- * Priority: CLI args > ANVIL_VAULT_PATH env var > config file
+ * Priority: CLI args > env vars > config file > defaults
  */
 export declare function loadServerConfig(cliArgs?: string[]): ServerConfig;
 /**

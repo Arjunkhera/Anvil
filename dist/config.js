@@ -10,7 +10,7 @@ const DEFAULT_CONFIG = {
 };
 /**
  * Load server config from CLI args, env var, or ~/.anvil/server.yaml.
- * Priority: CLI args > ANVIL_VAULT_PATH env var > config file
+ * Priority: CLI args > env vars > config file > defaults
  */
 export function loadServerConfig(cliArgs) {
     let config = { ...DEFAULT_CONFIG };
@@ -28,18 +28,38 @@ export function loadServerConfig(cliArgs) {
             // Silently ignore config file errors
         }
     }
-    // Check environment variable
+    // Check environment variable for vault path
     const envVaultPath = process.env.ANVIL_VAULT_PATH;
     if (envVaultPath) {
         config.vault_path = envVaultPath;
     }
-    // Check CLI args: --vault <path>
+    // Check environment variables for transport and port
+    const envTransport = process.env.ANVIL_TRANSPORT;
+    if (envTransport === 'http' || envTransport === 'stdio') {
+        config.transport = envTransport;
+    }
+    const envPort = parseInt(process.env.ANVIL_PORT || '', 10);
+    if (!isNaN(envPort)) {
+        config.port = envPort;
+    }
+    const envHost = process.env.ANVIL_HOST;
+    if (envHost) {
+        config.host = envHost;
+    }
+    // Check CLI args
     if (cliArgs) {
         const vaultIndex = cliArgs.indexOf('--vault');
         if (vaultIndex !== -1 && vaultIndex + 1 < cliArgs.length) {
             config.vault_path = cliArgs[vaultIndex + 1];
         }
-        // Check other CLI flags
+        // Check for shorthand transport flags
+        if (cliArgs.includes('--http')) {
+            config.transport = 'http';
+        }
+        if (cliArgs.includes('--stdio')) {
+            config.transport = 'stdio';
+        }
+        // Check for --transport flag (can override shorthand)
         const transportIndex = cliArgs.indexOf('--transport');
         if (transportIndex !== -1 && transportIndex + 1 < cliArgs.length) {
             const transport = cliArgs[transportIndex + 1];
@@ -60,6 +80,10 @@ export function loadServerConfig(cliArgs) {
             if (!isNaN(port)) {
                 config.port = port;
             }
+        }
+        const hostIndex = cliArgs.indexOf('--host');
+        if (hostIndex !== -1 && hostIndex + 1 < cliArgs.length) {
+            config.host = cliArgs[hostIndex + 1];
         }
     }
     return config;

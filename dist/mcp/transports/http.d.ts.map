@@ -1,0 +1,1 @@
+{"version":3,"file":"http.d.ts","sourceRoot":"","sources":["../../../src/mcp/transports/http.ts"],"names":[],"mappings":"AAKA,OAAO,KAAK,EAAE,MAAM,EAAE,MAAM,2CAA2C,CAAC;AAIxE,MAAM,WAAW,WAAW;IAC1B,IAAI,EAAE,MAAM,CAAC;IACb,IAAI,EAAE,MAAM,CAAC;CACd;AAeD;;;;;;GAMG;AACH,wBAAsB,SAAS,CAAC,MAAM,EAAE,MAAM,EAAE,IAAI,EAAE,WAAW,GAAG,OAAO,CAAC,IAAI,CAAC,CA4EhF"}
