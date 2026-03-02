@@ -25,6 +25,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     cmake \
     curl \
+    ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 # Install QMD globally from npm (if available) or from source

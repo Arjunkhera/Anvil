@@ -95,6 +95,20 @@ fi
 git -C "$NOTES_PATH" config user.email "horus@local" 2>/dev/null || true
 git -C "$NOTES_PATH" config user.name "Horus Anvil Sync" 2>/dev/null || true
 
+# Step 2.7: Bootstrap .anvil/types from defaults if _core.yaml is missing
+if [ ! -f "$NOTES_PATH/.anvil/types/_core.yaml" ]; then
+  log "Bootstrapping .anvil/types from defaults..."
+  mkdir -p "$NOTES_PATH/.anvil/types"
+  cp /app/defaults/*.yaml "$NOTES_PATH/.anvil/types/"
+  log "Default types installed"
+  if [ -d "$NOTES_PATH/.git" ]; then
+    git -C "$NOTES_PATH" add ".anvil/types/" 2>/dev/null || true
+    git -C "$NOTES_PATH" commit -m "bootstrap: add default .anvil/types" 2>/dev/null || true
+    git -C "$NOTES_PATH" push 2>/dev/null || log_err "Bootstrap push failed (non-fatal)"
+    log "Bootstrap committed and pushed"
+  fi
+fi
+
 # Step 3: Set up QMD collection if QMD is available
 if command -v qmd &>/dev/null; then
   log "Setting up QMD collection '$QMD_COLLECTION'..."
