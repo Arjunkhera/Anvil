@@ -64,9 +64,6 @@ async function main(): Promise<void> {
     db,
   };
 
-  // Create MCP server with all tool handlers
-  const server = createMcpServer(ctx);
-
   // Set up type watcher for hot reload
   let typeWatcher: TypeWatcher | null = null;
   try {
@@ -107,8 +104,10 @@ async function main(): Promise<void> {
   const host = config.host || process.env.ANVIL_HOST || '0.0.0.0';
 
   if (transport === 'http') {
-    await startHttp(server, { port, host });
+    // Pass a factory so each MCP session gets its own Server instance
+    await startHttp(() => createMcpServer(ctx), { port, host });
   } else {
+    const server = createMcpServer(ctx);
     await startStdio(server);
   }
 }

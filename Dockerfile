@@ -1,3 +1,23 @@
+# ─── Stage 1: Builder ─────────────────────────────────────────────────────
+# Installs all dependencies (including dev) and compiles TypeScript.
+FROM node:22-bookworm-slim AS builder
+
+WORKDIR /build
+
+# Copy manifests first (layer cache)
+COPY package.json package-lock.json tsconfig.json ./
+
+# Install all deps (including devDependencies needed for TypeScript compilation)
+RUN npm ci
+
+# Copy source files
+COPY src/ ./src/
+
+# Compile TypeScript → dist/
+RUN npm run build
+
+
+# ─── Stage 2: Runtime ─────────────────────────────────────────────────────
 FROM node:22-bookworm-slim
 
 # System dependencies for QMD (needs cmake for node-llama-cpp builds)
@@ -22,12 +42,14 @@ RUN useradd -ms /bin/bash anvil
 
 WORKDIR /app
 
-# Install production dependencies
+# Install production dependencies only
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
 
-# Copy built application
-COPY dist/ ./dist/
+# Copy compiled output from builder stage
+COPY --from=builder /build/dist/ ./dist/
+
+# Copy static assets
 COPY defaults/ ./defaults/
 
 # Entrypoint script
