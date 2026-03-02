@@ -211,4 +211,52 @@ describe('Integration: CRUD Operations', () => {
       }
     }
   });
+
+  it('should persist explicit content over template body when both are present', async () => {
+    // story type has a template body — content should take precedence
+    const customContent = '## Custom Content\n\nThis is my custom story content.';
+    const input: CreateNoteInput = {
+      type: 'story',
+      title: 'Story With Custom Content',
+      content: customContent,
+      fields: {
+        status: 'open',
+      },
+    };
+
+    const result = await handleCreateNote(input, ctx);
+    expect(!isAnvilError(result)).toBe(true);
+
+    if (!isAnvilError(result)) {
+      const getResult = await handleGetNote({ noteId: result.noteId }, ctx);
+      expect(!isAnvilError(getResult)).toBe(true);
+
+      if (!isAnvilError(getResult)) {
+        expect(getResult.body).toContain('Custom Content');
+        expect(getResult.body).not.toContain('Acceptance Criteria');
+      }
+    }
+  });
+
+  it('should use template body when no content is provided for templated types', async () => {
+    const input: CreateNoteInput = {
+      type: 'story',
+      title: 'Story With Template',
+      fields: {
+        status: 'open',
+      },
+    };
+
+    const result = await handleCreateNote(input, ctx);
+    expect(!isAnvilError(result)).toBe(true);
+
+    if (!isAnvilError(result)) {
+      const getResult = await handleGetNote({ noteId: result.noteId }, ctx);
+      expect(!isAnvilError(getResult)).toBe(true);
+
+      if (!isAnvilError(getResult)) {
+        expect(getResult.body).toContain('Acceptance Criteria');
+      }
+    }
+  });
 });

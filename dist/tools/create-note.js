@@ -40,13 +40,15 @@ export async function handleCreateNote(input, ctx) {
             Object.assign(frontmatter, input.fields);
         }
         // 4. Handle body content
+        // Explicit content always takes precedence over the type template body.
+        // Template body is only used when no content is provided and use_template is true.
         const useTemplate = input.use_template !== false;
         let body = '';
-        if (useTemplate && type.template?.body) {
-            body = type.template.body;
-        }
-        else if (input.content) {
+        if (input.content) {
             body = input.content;
+        }
+        else if (useTemplate && type.template?.body) {
+            body = type.template.body;
         }
         // 5. Build Note object with metadata
         const note = {
