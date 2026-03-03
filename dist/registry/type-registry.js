@@ -58,7 +58,7 @@ const TypeDefinitionSchema = z.object({
 export class TypeRegistry {
     types = new Map();
     definitions = new Map();
-    definitionSources = new Map(); // Track which directory each type came from
+    definitionSources = new Map(); // Track source (directory + file + plugin) for each type
     db;
     /**
      * Initialize the registry with an optional SQLite database for caching
@@ -133,12 +133,24 @@ export class TypeRegistry {
                     const definition = TypeDefinitionSchema.parse(raw);
                     // Check for conflict: type ID already loaded from different directory
                     if (this.definitions.has(definition.id)) {
-                        const previousSource = this.definitionSources.get(definition.id);
-                        console.warn(`Type '${definition.id}' from ${typesDir} ignored — already loaded from ${previousSource}`);
+                        const existingSource = this.definitionSources.get(definition.id);
+                        if (existingSource) {
+                            const existingDisplay = existingSource.plugin
+                                ? `${existingSource.directory}/${existingSource.file} (plugin: ${existingSource.plugin})`
+                                : `${existingSource.directory}/${existingSource.file}`;
+                            const newDisplay = `${typesDir}/${file}`;
+                            console.warn(`Type conflict: '${definition.id}' defined in both ${newDisplay} and ${existingDisplay}. Using ${existingDisplay} (higher precedence).`);
+                        }
                         continue;
                     }
+                    // Record source for this type
+                    const source = {
+                        directory: typesDir,
+                        file: file,
+                        plugin: this.extractPluginName(typesDir),
+                    };
                     this.definitions.set(definition.id, definition);
-                    this.definitionSources.set(definition.id, typesDir);
+                    this.definitionSources.set(definition.id, source);
                 }
                 catch (err) {
                     if (err instanceof z.ZodError) {
@@ -219,6 +231,11 @@ export class TypeRegistry {
                 mergedFields[fieldName] = fieldDef;
             }
         }
+        // Get source metadata for this type
+        const source = this.definitionSources.get(definition.id) || {
+            directory: '',
+            file: '',
+        };
         return {
             id: definition.id,
             name: definition.name,
@@ -229,7 +246,67 @@ export class TypeRegistry {
             behaviors: definition.behaviors || {},
             template: definition.template,
             ownFields,
+            source,
         };
+    }
+    /**
+     * Extract plugin name from a directory path.
+     * If the path matches /.anvil/plugins/{name}/types, returns {name}.
+     * Otherwise returns undefined.
+     */
+    extractPluginName(dir) {
+        const match = dir.match(/\.anvil[/\\]plugins[/\\]([^/\\]+)[/\\]types$/);
+        return match ? match[1] : undefined;
+    }
+    /**
+     * Get all types from a specific source directory or plugin name.
+     * dirOrPlugin can be either an absolute directory path or a plugin name.
+     */
+    getTypesBySource(dirOrPlugin) {
+        return this.getAllTypes().filter((type) => {
+            if (!type.source)
+                return false;
+            // Check if it matches the directory path
+            if (type.source.directory === dirOrPlugin)
+                return true;
+            // Check if it matches the plugin name
+            if (type.source.plugin === dirOrPlugin)
+                return true;
+            return false;
+        });
+    }
+    /**
+     * Convenience method: get all types contributed by a specific plugin.
+     * pluginName should be the name under .anvil/plugins/{name}/types/
+     */
+    getTypesByPlugin(pluginName) {
+        return this.getAllTypes().filter((type) => type.source?.plugin === pluginName);
+    }
+    /**
+     * Reload all type definitions from the given directories.
+     * Clears the current state and performs a fresh load.
+     * On failure, the previous state is preserved.
+     * Returns undefined on success, or an AnvilError on failure.
+     */
+    async reload(dirs) {
+        // Snapshot current state
+        const previousTypes = new Map(this.types);
+        const previousDefinitions = new Map(this.definitions);
+        const previousSources = new Map(this.definitionSources);
+        // Clear and reload
+        this.types.clear();
+        this.definitions.clear();
+        this.definitionSources.clear();
+        const result = await this.loadTypes(dirs);
+        if (result && 'error' in result) {
+            // Restore previous state on failure
+            this.types = previousTypes;
+            this.definitions = previousDefinitions;
+            this.definitionSources = previousSources;
+            console.error(`Type reload failed, keeping previous types: ${result.message}`);
+            return result;
+        }
+        console.info(`Type registry reloaded successfully. ${this.types.size} types loaded.`);
     }
     /**
      * Cache resolved types to SQLite `types` table (if db available)

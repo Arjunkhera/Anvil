@@ -16,12 +16,14 @@ import { join } from 'node:path';
 import type { TypeRegistry } from '../registry/type-registry.js';
 import type { AnvilDatabase } from '../index/sqlite.js';
 import type { AnvilWatcher } from '../storage/watcher.js';
+import type { SearchEngine } from '../core/search/engine.js';
 
 export type ToolContext = {
   vaultPath: string;
   registry: TypeRegistry;
   db: AnvilDatabase;
   watcher?: AnvilWatcher;
+  searchEngine?: SearchEngine;
 };
 
 /**

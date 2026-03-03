@@ -285,7 +285,7 @@ export function createMcpServer(ctx) {
                 }
                 case 'anvil_get_note': {
                     const input = GetNoteInputSchema.parse(args);
-                    const result = handleGetNote(input, ctx);
+                    const result = await handleGetNote(input, ctx);
                     if (isAnvilError(result)) {
                         return {
                             content: [

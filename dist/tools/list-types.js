@@ -24,6 +24,10 @@ export function handleListTypes(ctx) {
             behaviors: {
                 append_only: type.behaviors.append_only ?? false,
             },
+            source: type.source || {
+                directory: '',
+                file: '',
+            },
         };
     });
     return { types };

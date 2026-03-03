@@ -41,6 +41,29 @@ export declare class TypeRegistry {
      */
     private resolveType;
     /**
+     * Extract plugin name from a directory path.
+     * If the path matches /.anvil/plugins/{name}/types, returns {name}.
+     * Otherwise returns undefined.
+     */
+    private extractPluginName;
+    /**
+     * Get all types from a specific source directory or plugin name.
+     * dirOrPlugin can be either an absolute directory path or a plugin name.
+     */
+    getTypesBySource(dirOrPlugin: string): ResolvedType[];
+    /**
+     * Convenience method: get all types contributed by a specific plugin.
+     * pluginName should be the name under .anvil/plugins/{name}/types/
+     */
+    getTypesByPlugin(pluginName: string): ResolvedType[];
+    /**
+     * Reload all type definitions from the given directories.
+     * Clears the current state and performs a fresh load.
+     * On failure, the previous state is preserved.
+     * Returns undefined on success, or an AnvilError on failure.
+     */
+    reload(dirs: string[]): Promise<void | AnvilError>;
+    /**
      * Cache resolved types to SQLite `types` table (if db available)
      */
     private cacheTypesToDb;

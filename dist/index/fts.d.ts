@@ -11,6 +11,13 @@ export interface SearchResult {
  */
 export declare function searchFts(db: AnvilDb, query: string, limit: number, offset: number): SearchResult[];
 /**
+ * Build parameterized SQL query from QueryFilter
+ */
+export declare function buildQuerySql(filters: QueryFilter): {
+    sql: string;
+    params: any[];
+};
+/**
  * Query notes with filters, sorting, and pagination
  */
 export declare function queryNotes(db: AnvilDb, filters: QueryFilter, orderBy: SortOrder, limit: number, offset: number): {

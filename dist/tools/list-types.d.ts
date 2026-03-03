@@ -1,4 +1,5 @@
 import type { ToolContext } from './create-note.js';
+import type { TypeSource } from '../types/index.js';
 export type FieldInfo = {
     name: string;
     type: string;
@@ -21,6 +22,7 @@ export type TypeInfo = {
     behaviors: {
         append_only: boolean;
     };
+    source: TypeSource;
 };
 /**
  * Handle anvil_list_types request.
