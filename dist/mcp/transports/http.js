@@ -1,6 +1,7 @@
 // HTTP Streamable transport for MCP server
 // Story 017: Implements HTTP transport with health endpoint and graceful shutdown
 import * as http from 'node:http';
+import { randomUUID } from 'node:crypto';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 const startTime = Date.now();
 /**
@@ -17,17 +18,17 @@ function log(level, message, extra) {
 }
 /**
  * Start the MCP server using HTTP transport with StreamableHTTP protocol.
+ * Supports multiple concurrent sessions via per-session transport instances.
  * Features:
  * - /health endpoint returning server status and uptime
+ * - Per-session transport routing (new session per initialize request)
  * - Graceful shutdown on SIGTERM/SIGINT
  * - JSON logging to stderr
  */
-export async function startHttp(server, opts) {
+export async function startHttp(serverFactory, opts) {
     const { port, host } = opts;
-    // Create transport instance (stateless mode - no session management)
-    const transport = new StreamableHTTPServerTransport({
-        sessionIdGenerator: undefined, // Stateless mode
-    });
+    // Session registry: maps sessionId -> transport
+    const sessions = new Map();
     // Create HTTP server
     const httpServer = http.createServer(async (req, res) => {
         // Handle health check endpoint
@@ -45,6 +46,27 @@ export async function startHttp(server, opts) {
         }
         // Route all other requests to MCP transport
         try {
+            const sessionId = req.headers['mcp-session-id'];
+            let transport = sessionId ? sessions.get(sessionId) : undefined;
+            if (!transport) {
+                // New session: create a fresh transport and server instance
+                const server = serverFactory();
+                transport = new StreamableHTTPServerTransport({
+                    sessionIdGenerator: () => randomUUID(),
+                    enableJsonResponse: true,
+                    onsessioninitialized: (sid) => {
+                        sessions.set(sid, transport);
+                        log('info', 'MCP session initialized', { sessionId: sid });
+                    },
+                });
+                transport.onclose = () => {
+                    if (transport.sessionId) {
+                        sessions.delete(transport.sessionId);
+                        log('info', 'MCP session closed', { sessionId: transport.sessionId });
+                    }
+                };
+                await server.connect(transport);
+            }
             await transport.handleRequest(req, res);
         }
         catch (error) {
@@ -53,12 +75,12 @@ export async function startHttp(server, opts) {
                 method: req.method,
                 error: error instanceof Error ? error.message : String(error),
             });
-            res.writeHead(500, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ error: 'Internal server error' }));
+            if (!res.headersSent) {
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Internal server error' }));
+            }
         }
     });
-    // Connect the server to the transport
-    await server.connect(transport);
     // Graceful shutdown handler
     const shutdown = async (signal) => {
         log('info', `Received ${signal}, shutting down gracefully...`);

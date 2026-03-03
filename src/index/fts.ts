@@ -62,7 +62,7 @@ export function searchFts(
 /**
  * Build parameterized SQL query from QueryFilter
  */
-function buildQuerySql(filters: QueryFilter): {
+export function buildQuerySql(filters: QueryFilter): {
   sql: string;
   params: any[];
 } {

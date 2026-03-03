@@ -10,6 +10,7 @@ import { createMcpServer } from './mcp/server.js';
 import { startStdio } from './mcp/transports/stdio.js';
 import { startHttp } from './mcp/transports/http.js';
 import { createTypeWatcher } from './watcher/type-watcher.js';
+import { createSearchEngine } from './core/search/index.js';
 import type { ToolContext } from './tools/create-note.js';
 import type { TypeWatcher } from './watcher/type-watcher.js';
 
@@ -57,11 +58,19 @@ async function main(): Promise<void> {
     db.upsertType(type);
   }
 
+  // Initialize search engine (QMD semantic if available, FTS fallback)
+  const { engine: searchEngine, mode: searchMode } = await createSearchEngine(db.raw, {
+    qmdCollection: process.env.ANVIL_QMD_COLLECTION,
+    qmdPath: process.env.QMD_PATH,
+  });
+  process.stderr.write(JSON.stringify({ level: 'info', message: `Search engine: ${searchMode}`, timestamp: new Date().toISOString() }) + '\n');
+
   // Create tool context
   const ctx: ToolContext = {
     vaultPath: config.vault_path,
     registry,
     db,
+    searchEngine,
   };
 
   // Set up type watcher for hot reload

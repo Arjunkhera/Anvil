@@ -1,6 +1,63 @@
 // Handler for anvil_search tool
 import { makeError, ERROR_CODES } from '../types/error.js';
-import { searchFts, queryNotes, combinedSearch } from '../index/fts.js';
+import { searchFts, queryNotes, combinedSearch, buildQuerySql } from '../index/fts.js';
+/**
+ * Resolve semantic search results to database note IDs.
+ *
+ * QMD returns file paths as `noteId` (via normalizeResults). We look them up
+ * in `notes.file_path`. Handles both relative paths (stored in DB) and absolute
+ * paths (QMD may return absolute) by stripping the vault prefix when needed.
+ *
+ * Results that cannot be resolved are dropped.
+ */
+function resolveSemanticNoteIds(db, results, vaultPath) {
+    if (results.length === 0)
+        return [];
+    const resolved = [];
+    const vaultPrefix = vaultPath.endsWith('/') ? vaultPath : vaultPath + '/';
+    for (const r of results) {
+        if (!r.noteId)
+            continue;
+        // 1. Try exact match (covers relative path stored in DB)
+        let row = db.getOne('SELECT note_id FROM notes WHERE file_path = ?', [r.noteId]);
+        if (row) {
+            resolved.push({ ...r, noteId: row.note_id });
+            continue;
+        }
+        // 2. Try stripping vault prefix (covers absolute paths from QMD)
+        if (r.noteId.startsWith(vaultPrefix)) {
+            const relative = r.noteId.slice(vaultPrefix.length);
+            row = db.getOne('SELECT note_id FROM notes WHERE file_path = ?', [relative]);
+            if (row) {
+                resolved.push({ ...r, noteId: row.note_id });
+                continue;
+            }
+        }
+        // 3. Try as a UUID directly (in case QMD was somehow given UUIDs as docids)
+        row = db.getOne('SELECT note_id FROM notes WHERE note_id = ?', [r.noteId]);
+        if (row) {
+            resolved.push(r);
+        }
+        // Otherwise drop — can't resolve to a known note
+    }
+    return resolved;
+}
+/**
+ * Apply structured filters to a set of pre-resolved note IDs.
+ * Returns only the IDs that pass the filter.
+ */
+function filterNoteIds(db, noteIds, filter) {
+    if (noteIds.length === 0)
+        return [];
+    const { sql: baseSql, params: baseParams } = buildQuerySql(filter);
+    const placeholders = noteIds.map(() => '?').join(',');
+    const whereConnector = baseSql.toUpperCase().includes('WHERE') ? ' AND ' : ' WHERE ';
+    const constrainedSql = baseSql + `${whereConnector}notes.note_id IN (${placeholders})`;
+    const rows = db.getAll(
+    // Wrap to select only the note_id column
+    `SELECT notes.note_id FROM (${constrainedSql.trim()}) AS notes`, [...baseParams, ...noteIds]);
+    return rows.map((r) => r.note_id);
+}
 /**
  * Fetch tags for a set of note IDs.
  * Returns a Map<noteId, string[]>.
@@ -112,36 +169,70 @@ export async function handleSearch(input, ctx) {
         const hasActiveFilters = hasFilters(filter);
         let searchResults = [];
         let total = 0;
-        // Case 1: Query + Filters → use combinedSearch
+        // Case 1: Query + Filters → semantic search candidates filtered by structured criteria
         if (input.query && hasActiveFilters) {
-            const combined = combinedSearch(ctx.db.raw, input.query, filter, limit, offset);
-            searchResults = combined.results.map((r) => ({
-                noteId: r.noteId,
-                score: r.score,
-                snippet: r.snippet,
-            }));
-            total = combined.total;
-        }
-        // Case 2: Query only → use searchFts, then fetch metadata
-        else if (input.query && !hasActiveFilters) {
-            const ftsResults = searchFts(ctx.db.raw, input.query, limit, offset);
-            total = ftsResults.length;
-            // FTS doesn't return a total count, so we approximate:
-            // If we get fewer results than limit, we've hit the end
-            // Otherwise, we estimate there might be more (could query count separately)
-            if (ftsResults.length < limit) {
-                total = offset + ftsResults.length;
+            if (ctx.searchEngine) {
+                try {
+                    // Fetch more candidates than needed to allow for filter attrition
+                    const rawResults = await ctx.searchEngine.query(input.query, { limit: limit * 5 });
+                    const resolved = resolveSemanticNoteIds(ctx.db.raw, rawResults, ctx.vaultPath);
+                    const filteredIds = filterNoteIds(ctx.db.raw, resolved.map((r) => r.noteId), filter);
+                    const filteredSet = new Set(filteredIds);
+                    const filtered = resolved.filter((r) => filteredSet.has(r.noteId));
+                    total = filtered.length;
+                    searchResults = filtered.slice(offset, offset + limit);
+                }
+                catch {
+                    // Semantic search failed — fall back to FTS combined search
+                    const combined = combinedSearch(ctx.db.raw, input.query, filter, limit, offset);
+                    searchResults = combined.results;
+                    total = combined.total;
+                }
             }
             else {
-                // Try to count total FTS matches by running a count query
-                const countRow = ctx.db.raw.getOne(`SELECT COUNT(*) as count FROM notes_fts WHERE notes_fts MATCH ?`, [input.query]);
-                total = countRow?.count ?? 0;
+                const combined = combinedSearch(ctx.db.raw, input.query, filter, limit, offset);
+                searchResults = combined.results.map((r) => ({
+                    noteId: r.noteId,
+                    score: r.score,
+                    snippet: r.snippet,
+                }));
+                total = combined.total;
             }
-            searchResults = ftsResults.map((r) => ({
-                noteId: r.noteId,
-                score: r.score,
-                snippet: r.snippet,
-            }));
+        }
+        // Case 2: Query only → semantic search (or FTS fallback)
+        else if (input.query && !hasActiveFilters) {
+            if (ctx.searchEngine) {
+                try {
+                    const rawResults = await ctx.searchEngine.query(input.query, { limit, offset });
+                    const resolved = resolveSemanticNoteIds(ctx.db.raw, rawResults, ctx.vaultPath);
+                    searchResults = resolved;
+                    total = resolved.length < limit ? offset + resolved.length : offset + limit;
+                }
+                catch {
+                    // Semantic search failed — fall back to FTS
+                    const ftsResults = searchFts(ctx.db.raw, input.query, limit, offset);
+                    searchResults = ftsResults;
+                    total = ftsResults.length < limit
+                        ? offset + ftsResults.length
+                        : (ctx.db.raw.getOne(`SELECT COUNT(*) as count FROM notes_fts WHERE notes_fts MATCH ?`, [input.query])?.count ?? 0);
+                }
+            }
+            else {
+                const ftsResults = searchFts(ctx.db.raw, input.query, limit, offset);
+                total = ftsResults.length;
+                if (ftsResults.length < limit) {
+                    total = offset + ftsResults.length;
+                }
+                else {
+                    const countRow = ctx.db.raw.getOne(`SELECT COUNT(*) as count FROM notes_fts WHERE notes_fts MATCH ?`, [input.query]);
+                    total = countRow?.count ?? 0;
+                }
+                searchResults = ftsResults.map((r) => ({
+                    noteId: r.noteId,
+                    score: r.score,
+                    snippet: r.snippet,
+                }));
+            }
         }
         // Case 3: Filters only → use queryNotes
         else if (hasActiveFilters) {

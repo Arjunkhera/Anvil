@@ -41,6 +41,12 @@ export type TypeDefinition = {
     behaviors?: TypeBehaviors;
     template?: TypeTemplate;
 };
+/** Metadata tracking the source of a type definition */
+export type TypeSource = {
+    directory: string;
+    file: string;
+    plugin?: string;
+};
 /**
  * A resolved type has its full field set already merged with parent fields.
  * Consumers never need to walk the inheritance chain.
@@ -57,6 +63,8 @@ export type ResolvedType = {
     template?: TypeTemplate;
     /** Only fields defined directly on this type (not inherited) */
     ownFields: Record<string, FieldDefinition>;
+    /** Source tracking: which directory and file this type came from */
+    source: TypeSource;
 };
 export type ValidationMode = 'strict' | 'warn';
 export type FieldValidationError = {

@@ -39,7 +39,7 @@ export function searchFts(db, query, limit, offset) {
 /**
  * Build parameterized SQL query from QueryFilter
  */
-function buildQuerySql(filters) {
+export function buildQuerySql(filters) {
     const conditions = [];
     const params = [];
     // Type filter
