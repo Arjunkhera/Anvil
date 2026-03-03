@@ -1,1 +1,0 @@
-{"version":3,"file":"stdio.js","sourceRoot":"","sources":["../../../src/mcp/transports/stdio.ts"],"names":[],"mappings":"AAAA,wCAAwC;AACxC,oEAAoE;AAEpE,OAAO,EAAE,oBAAoB,EAAE,MAAM,2CAA2C,CAAC;AAGjF;;;;GAIG;AACH,MAAM,CAAC,KAAK,UAAU,UAAU,CAAC,MAAc;IAC7C,MAAM,SAAS,GAAG,IAAI,oBAAoB,EAAE,CAAC;IAC7C,MAAM,MAAM,CAAC,OAAO,CAAC,SAAS,CAAC,CAAC;IAChC,2DAA2D;IAC3D,sDAAsD;AACxD,CAAC"}
