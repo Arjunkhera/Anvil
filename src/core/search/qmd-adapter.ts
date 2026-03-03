@@ -145,7 +145,7 @@ export class QMDAdapter implements SearchEngine {
       .map(item => ({
         // Prefer file path — it can be resolved to a note UUID via notes.file_path.
         // QMD's docid is an internal hash (#abc123) that is not stored in our DB.
-        noteId: this.pathToNoteId(item.file ?? '') || item.docid ?? item.id ?? '',
+        noteId: this.pathToNoteId(item.file ?? '') || (item.docid ?? item.id ?? ''),
         score: typeof item.score === 'number' ? item.score : 0,
         snippet: typeof item.snippet === 'string' ? item.snippet : (item.content ?? ''),
         file: item.file,
