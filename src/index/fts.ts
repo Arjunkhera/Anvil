@@ -8,20 +8,26 @@ export interface SearchResult {
 }
 
 /**
- * Sanitize FTS5 query string
- * - Escape special FTS5 characters
- * - Wrap multi-word queries in quotes
+ * Sanitize FTS5 query string.
+ * - Strips dangerous FTS5 operators (parentheses, quotes, colons)
+ * - Splits multi-word queries into individual terms joined by OR
+ *   so "anvil issues" matches notes containing either word (ranked by BM25)
+ * - Single words are passed through as-is for prefix or exact match
+ * - Empty/whitespace-only queries become '*' (match all)
  */
 function sanitizeFtsQuery(query: string): string {
-  // Escape special FTS5 characters: ( ) " *
-  let sanitized = query.replace(/[()":*]/g, '');
+  const cleaned = query.replace(/[()":]/g, '').trim();
 
-  // If multi-word, wrap in quotes for phrase search
-  if (sanitized.trim().includes(' ')) {
-    sanitized = `"${sanitized.trim()}"`;
-  }
+  if (!cleaned) return '*';
 
-  return sanitized || '*';
+  const words = cleaned.split(/\s+/).filter(Boolean);
+  if (words.length === 0) return '*';
+
+  if (words.length === 1) return words[0];
+
+  // Multiple words — join with OR for broader matching.
+  // BM25 ranking will still prefer notes that match more terms.
+  return words.join(' OR ');
 }
 
 /**

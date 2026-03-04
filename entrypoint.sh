@@ -132,6 +132,14 @@ if command -v qmd &>/dev/null; then
       echo "{\"level\":\"debug\",\"message\":\"qmd: $line\",\"timestamp\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}" >&2
     done
     log "Initial index complete"
+
+    # Generate vector embeddings for semantic search.
+    # First run downloads the embedding model (~300MB).
+    log "Generating QMD embeddings (first run downloads model)..."
+    qmd embed -c "$QMD_COLLECTION" 2>&1 | while read line; do
+      echo "{\"level\":\"debug\",\"message\":\"qmd-embed: $line\",\"timestamp\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}" >&2
+    done
+    log "Embeddings complete"
   else
     log "QMD index exists with $INDEX_COUNT documents, skipping rebuild"
   fi
