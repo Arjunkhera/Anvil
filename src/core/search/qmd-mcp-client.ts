@@ -44,7 +44,7 @@ export class QMDMcpClient {
   private async initialize(): Promise<void> {
     const res = await fetch(this.mcpUrl, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream' },
       body: JSON.stringify({
         jsonrpc: '2.0',
         id: this.nextId(),
@@ -80,7 +80,7 @@ export class QMDMcpClient {
   private async doCallTool(name: string, args: Record<string, unknown>): Promise<QMDSearchResult[]> {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
-      Accept: 'application/json',
+      Accept: 'application/json, text/event-stream',
     };
     if (this.sessionId) headers['Mcp-Session-Id'] = this.sessionId;
 
