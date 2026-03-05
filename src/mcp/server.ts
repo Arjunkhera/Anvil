@@ -125,7 +125,7 @@ export function createMcpServer(ctx: ToolContext): Server {
         properties: {
           query: {
             type: 'string',
-            description: 'Free-text search query (supports FTS5 syntax)',
+            description: 'Free-text search query (supports FTS5 syntax). Omit entirely for unfiltered search — do not pass "*".',
           },
           type: {
             type: 'string',
@@ -133,7 +133,7 @@ export function createMcpServer(ctx: ToolContext): Server {
           },
           status: {
             type: 'string',
-            description: 'Filter by status',
+            description: 'Filter by status. Call anvil_list_types first — valid values vary by type.',
           },
           priority: {
             type: 'string',
@@ -158,9 +158,26 @@ export function createMcpServer(ctx: ToolContext): Server {
             },
             description: 'Due date range filter (ISO date strings)',
           },
+          assignee: {
+            type: 'string',
+            description: 'Filter by assignee note ID',
+          },
+          project: {
+            type: 'string',
+            description: 'Filter by project note ID',
+          },
+          scope: {
+            type: 'object',
+            properties: {
+              context: { type: 'string', enum: ['personal', 'work'] },
+              team: { type: 'string' },
+              service: { type: 'string' },
+            },
+            description: 'Filter by scope context',
+          },
           limit: {
             type: 'number',
-            description: 'Maximum number of results (default: 100)',
+            description: 'Maximum number of results (default: 20, max: 100)',
           },
           offset: {
             type: 'number',
@@ -175,11 +192,25 @@ export function createMcpServer(ctx: ToolContext): Server {
       inputSchema: {
         type: 'object',
         properties: {
-          filter: {
+          view: {
+            type: 'string',
+            enum: ['list', 'table', 'board'],
+            description: 'View type to render (required)',
+          },
+          filters: {
             type: 'object',
             description: 'Query filter criteria',
+            properties: {
+              query: { type: 'string', description: 'FTS5 text search' },
+              type: { type: 'string', description: 'Filter by note type' },
+              status: { type: 'string', description: 'Filter by status' },
+              priority: { type: 'string', description: 'Filter by priority' },
+              tags: { type: 'array', items: { type: 'string' }, description: 'AND-matched tags' },
+              assignee: { type: 'string', description: 'Filter by assignee note ID' },
+              project: { type: 'string', description: 'Filter by project note ID' },
+            },
           },
-          sort: {
+          orderBy: {
             type: 'object',
             properties: {
               field: {
@@ -192,31 +223,27 @@ export function createMcpServer(ctx: ToolContext): Server {
                 description: 'Sort direction',
               },
             },
-            description: 'Sort options',
-          },
-          format: {
-            type: 'string',
-            enum: ['list', 'table', 'board'],
-            description: 'Output format (default: list)',
+            description: 'Sort options (default: modified desc)',
           },
           columns: {
             type: 'array',
             items: { type: 'string' },
-            description: 'Columns for table format',
+            description: 'Columns for table view',
           },
           groupBy: {
             type: 'string',
-            description: 'Field to group by for board format',
+            description: 'Field to group by — required for board view',
           },
           limit: {
             type: 'number',
-            description: 'Maximum number of results (default: 100)',
+            description: 'Maximum number of results (default: 50, max: 100)',
           },
           offset: {
             type: 'number',
             description: 'Result offset for pagination (default: 0)',
           },
         },
+        required: ['view'],
       },
     },
     {
