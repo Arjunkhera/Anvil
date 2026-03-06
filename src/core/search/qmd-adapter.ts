@@ -198,7 +198,12 @@ export class QMDAdapter implements SearchEngine {
   }
 
   private pathToNoteId(filePath: string): string {
-    // The real noteId will be looked up from frontmatter by the search handler
+    // QMD prefixes file paths with the collection name (e.g., "anvil/note.md").
+    // Strip it so the path matches what's stored in notes.file_path.
+    const prefix = this.collectionName + '/';
+    if (filePath.startsWith(prefix)) {
+      return filePath.slice(prefix.length);
+    }
     return filePath;
   }
 }
