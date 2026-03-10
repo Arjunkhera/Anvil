@@ -7,6 +7,9 @@ REPO_URL="${ANVIL_REPO_URL:-}"
 SYNC_INTERVAL="${ANVIL_SYNC_INTERVAL:-300}"
 GITHUB_TOKEN="${GITHUB_TOKEN:-}"
 
+# Mark bind-mounted path as safe for git (CVE-2022-24765: ownership differs in container)
+git config --global --add safe.directory "$NOTES_PATH"
+
 # PID of the background git sync daemon (set in Step 4 if started)
 SYNC_PID=""
 # PID of the Anvil MCP server process
