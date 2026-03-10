@@ -28,6 +28,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     g++ \
     curl \
     ca-certificates \
+    gosu \
     && rm -rf /var/lib/apt/lists/*
 
 # Create non-root user early so QMD is installed into their home
@@ -59,8 +60,6 @@ RUN chmod +x entrypoint.sh
 
 # Data directories + QMD cache (must exist before USER switch for volume mount permissions)
 RUN mkdir -p /data/notes /home/anvil/.cache/qmd && chown -R anvil:anvil /app /data /home/anvil/.cache
-
-USER anvil
 
 EXPOSE 8100
 
