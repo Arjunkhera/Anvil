@@ -1,6 +1,11 @@
 #!/bin/bash
 set -e
 
+if [ "$(id -u)" = "0" ]; then
+  chown -R anvil:anvil "${ANVIL_NOTES_PATH:-/data/notes}" /home/anvil
+  exec gosu anvil "$0" "$@"
+fi
+
 NOTES_PATH="${ANVIL_NOTES_PATH:-/data/notes}"
 QMD_COLLECTION="${ANVIL_QMD_COLLECTION:-anvil}"
 REPO_URL="${ANVIL_REPO_URL:-}"
