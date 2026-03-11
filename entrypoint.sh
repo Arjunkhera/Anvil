@@ -11,6 +11,18 @@ QMD_COLLECTION="${ANVIL_QMD_COLLECTION:-anvil}"
 REPO_URL="${ANVIL_REPO_URL:-}"
 SYNC_INTERVAL="${ANVIL_SYNC_INTERVAL:-300}"
 GITHUB_TOKEN="${GITHUB_TOKEN:-}"
+HORUS_RUNTIME="${HORUS_RUNTIME:-docker}"
+
+# ── Podman runtime fixups ────────────────────────────────────────────────────
+# Under Podman with user-namespace remapping, bind-mounted directories may be
+# owned by a remapped UID. Fix ownership so the anvil user can write.
+# Under Docker Desktop (macOS gRPC-FUSE), chown on bind mounts fails on
+# read-only git objects — skip it entirely.
+if [ "$HORUS_RUNTIME" = "podman" ]; then
+  chown -R anvil:anvil /data/notes 2>/dev/null || true
+  chown -R anvil:anvil /home/anvil/.cache/qmd 2>/dev/null || true
+  git config --global safe.directory '*'
+fi
 
 # Mark bind-mounted path as safe for git (CVE-2022-24765: ownership differs in container)
 git config --global --add safe.directory "$NOTES_PATH"
