@@ -1,7 +1,12 @@
 #!/bin/bash
 set -e
 
-if [ "$(id -u)" = "0" ]; then
+# ── Privilege handling ────────────────────────────────────────────────────────
+# Under Docker: chown bind-mounted dirs to anvil, then drop to anvil via gosu.
+# Under Podman rootless: root inside the container is already the unprivileged
+# host user (user-namespace remapping), and chown on virtiofs bind mounts fails
+# with EPERM. Skip chown+gosu entirely and keep running as root.
+if [ "$(id -u)" = "0" ] && [ "${HORUS_RUNTIME:-docker}" != "podman" ]; then
   chown -R anvil:anvil "${ANVIL_NOTES_PATH:-/data/notes}" /home/anvil
   exec gosu anvil "$0" "$@"
 fi
