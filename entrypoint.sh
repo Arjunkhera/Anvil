@@ -18,6 +18,12 @@ SYNC_INTERVAL="${ANVIL_SYNC_INTERVAL:-300}"
 GITHUB_TOKEN="${GITHUB_TOKEN:-}"
 HORUS_RUNTIME="${HORUS_RUNTIME:-docker}"
 
+# Clear stale safe.directory entries left over from a previous container restart.
+# Without this, --add accumulates duplicates and a subsequent plain SET fails
+# with "cannot overwrite multiple values" (git exit code 5), crash-looping the
+# container under restart: unless-stopped.
+git config --global --unset-all safe.directory 2>/dev/null || true
+
 # ── Podman runtime fixups ────────────────────────────────────────────────────
 # Under Podman with user-namespace remapping, bind-mounted directories may be
 # owned by a remapped UID. Fix ownership so the anvil user can write.
