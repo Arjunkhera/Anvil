@@ -7,7 +7,10 @@ set -e
 # host user (user-namespace remapping), and chown on virtiofs bind mounts fails
 # with EPERM. Skip chown+gosu entirely and keep running as root.
 if [ "$(id -u)" = "0" ] && [ "${HORUS_RUNTIME:-docker}" != "podman" ]; then
-  chown -R anvil:anvil "${ANVIL_NOTES_PATH:-/data/notes}" /home/anvil
+  # Best-effort chown: on macOS Docker Desktop (VirtioFS/gRPC-FUSE), chown
+  # fails on git pack files (mode 0444) with EPERM. Tolerate partial failures
+  # — the important directories will still be owned correctly.
+  chown -R anvil:anvil "${ANVIL_NOTES_PATH:-/data/notes}" /home/anvil 2>/dev/null || true
   exec gosu anvil "$0" "$@"
 fi
 
