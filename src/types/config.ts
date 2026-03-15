@@ -26,6 +26,7 @@ export type ServerConfig = {
 /** Default ignore patterns for the file watcher and vault scanner */
 export const DEFAULT_IGNORE_PATTERNS = [
   '.anvil/.local',
+  '_system',   // Horus UI: dashboard configs and preferences — must not be indexed
   '.git',
   'node_modules',
   '**/*~',

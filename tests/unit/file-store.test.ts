@@ -360,6 +360,24 @@ And [[another link]] here.`;
       expect(results).toContain(join('subdir', 'note2.md'));
       expect(results.some((r) => r.includes('.git'))).toBe(false);
     });
+    it('should not scan _system/ directory', async () => {
+      // _system/ holds Horus UI dashboards and preferences — must never be indexed
+      const notePath = join(tmpDir, 'note1.md');
+      const systemJson = join(tmpDir, '_system', 'ui', 'dashboards.json');
+
+      await fs.mkdir(join(tmpDir, '_system', 'ui'), { recursive: true });
+      await fs.writeFile(notePath, 'content');
+      await fs.writeFile(systemJson, JSON.stringify({ dashboards: [] }));
+
+      const results: string[] = [];
+      for await (const result of scanVault(tmpDir)) {
+        results.push(result.filePath);
+      }
+
+      expect(results).toContain('note1.md');
+      expect(results.some((r) => r.includes('_system'))).toBe(false);
+    });
+
 
     it('should handle empty vault', async () => {
       const results: string[] = [];
