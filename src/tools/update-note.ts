@@ -59,22 +59,7 @@ export async function handleUpdateNote(
       );
     }
 
-    // 3. Check append_only constraint
-    if (
-      type.behaviors.append_only &&
-      input.content &&
-      input.content.trim() !== existingNote.body.trim()
-    ) {
-      // Check if it's actually a replacement vs append
-      if (!existingNote.body.includes(input.content)) {
-        return makeError(
-          ERROR_CODES.APPEND_ONLY,
-          `Type ${existingNote.type} has append_only behavior: body can only be appended, not replaced`
-        );
-      }
-    }
-
-    // 4. Check immutable fields
+    // 3. Check immutable fields
     const immutableFields = new Set(['noteId', 'created']);
     if (input.fields) {
       for (const fieldName of immutableFields) {
