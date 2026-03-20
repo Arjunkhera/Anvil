@@ -11,6 +11,7 @@ import { readNote, writeNote } from '../storage/file-store.js';
 import { getNote, upsertNote } from '../index/indexer.js';
 import { validateNote } from '../registry/validator.js';
 import type { ToolContext } from './create-note.js';
+import { indexNote } from '../search/typesense-indexer.js';
 
 /**
  * Handle anvil_update_note request.
@@ -200,7 +201,12 @@ export async function handleUpdateNote(
       );
     }
 
-    // 9. Return result with list of changed fields
+    // 9. Fire-and-forget Typesense indexing
+    if (ctx.typesenseClient) {
+      indexNote(ctx.typesenseClient, updatedNote).catch(() => {});
+    }
+
+    // 10. Return result with list of changed fields
     const changedFields: string[] = [];
 
     // Check which fields changed

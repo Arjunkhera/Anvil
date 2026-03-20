@@ -17,6 +17,8 @@ import type { TypeRegistry } from '../registry/type-registry.js';
 import type { AnvilDatabase } from '../index/sqlite.js';
 import type { AnvilWatcher } from '../storage/watcher.js';
 import type { SearchEngine } from '../core/search/engine.js';
+import type { TypesenseSearchClient } from '../search/typesense-client.js';
+import { indexNote } from '../search/typesense-indexer.js';
 
 export type ToolContext = {
   vaultPath: string;
@@ -24,6 +26,7 @@ export type ToolContext = {
   db: AnvilDatabase;
   watcher?: AnvilWatcher;
   searchEngine?: SearchEngine;
+  typesenseClient?: TypesenseSearchClient;
 };
 
 /**
@@ -154,7 +157,12 @@ export async function handleCreateNote(
       );
     }
 
-    // 10. Return result
+    // 10. Fire-and-forget Typesense indexing
+    if (ctx.typesenseClient) {
+      indexNote(ctx.typesenseClient, note).catch(() => {});
+    }
+
+    // 11. Return result
     return {
       noteId,
       filePath,
