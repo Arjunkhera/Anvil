@@ -8,6 +8,13 @@ import type { AnvilError } from '../types/error.js';
 import type { QueryFilter } from '../types/query.js';
 import { makeError, ERROR_CODES } from '../types/error.js';
 import { searchFts, queryNotes, combinedSearch, buildQuerySql } from '../index/fts.js';
+import {
+  type TypesenseSearchClient,
+  type TypesenseSearchQuery,
+  type TypesenseSearchResponse,
+  buildFilterBy,
+} from '../search/index.js';
+import { toEpochMs } from '../search/typesense-indexer.js';
 
 /**
  * Resolve semantic search results to database note IDs.
@@ -229,8 +236,109 @@ function hasFilters(filter: QueryFilter): boolean {
   );
 }
 
+// ─── Typesense search helpers ───────────────────────────────────────────────
+
+/**
+ * Translate a SearchInput into a TypesenseSearchQuery.
+ * Automatically adds `source:=anvil` to filter_by so only Anvil notes are returned.
+ */
+export function buildTypesenseQuery(input: SearchInput): TypesenseSearchQuery {
+  const filters: Record<string, unknown> = { source: 'anvil' };
+
+  if (input.type) filters.source_type = input.type;
+  if (input.status) filters.status = input.status;
+  if (input.priority) filters.priority = input.priority;
+  if (input.tags && input.tags.length > 0) filters.tags = input.tags;
+  if (input.assignee) filters.assignee_id = input.assignee;
+  if (input.project) filters.project_id = input.project;
+
+  // Scope filters
+  if (input.scope?.context) filters.scope_context = input.scope.context;
+
+  // Due date range → epoch ms range
+  if (input.due) {
+    const dueRange: { gte?: number; lte?: number } = {};
+    if (input.due.gte) dueRange.gte = toEpochMs(input.due.gte);
+    if (input.due.lte) dueRange.lte = toEpochMs(input.due.lte);
+    if (dueRange.gte || dueRange.lte) filters.due_at = dueRange;
+  }
+
+  const filterBy = buildFilterBy(filters);
+
+  // Page number is 1-based in Typesense
+  const perPage = input.limit || 20;
+  const page = Math.floor((input.offset || 0) / perPage) + 1;
+
+  return {
+    q: input.query || '*',
+    query_by: 'title,body,tags',
+    filter_by: filterBy || undefined,
+    sort_by: input.query ? undefined : 'modified_at:desc',
+    per_page: perPage,
+    page,
+    highlight_fields: 'title,body',
+    snippet_threshold: 60,
+  };
+}
+
+/**
+ * Execute a Typesense search query, enrich results with SQLite metadata,
+ * and return the standard SearchResponse format.
+ *
+ * Falls back to `{ search_unavailable: true }` on connection errors,
+ * allowing the caller to retry via FTS5.
+ */
+export async function searchViaTypesense(
+  client: TypesenseSearchClient,
+  input: SearchInput,
+  db: AnvilDb
+): Promise<SearchResponse & { search_unavailable?: boolean }> {
+  const query = buildTypesenseQuery(input);
+  const tsResponse: TypesenseSearchResponse = await client.search(query);
+
+  if (tsResponse.search_unavailable) {
+    return { results: [], total: 0, limit: input.limit || 20, offset: input.offset || 0, search_unavailable: true };
+  }
+
+  // Map Typesense results to note IDs
+  const noteIds = tsResponse.results.map((r) => r.id);
+
+  // Enrich from SQLite for consistent metadata
+  const tagsMap = fetchTagsForNotes(db, noteIds);
+  const metadataMap = fetchNoteMetadata(db, noteIds);
+
+  const results: SearchResult[] = [];
+  for (const tsResult of tsResponse.results) {
+    const metadata = metadataMap.get(tsResult.id);
+    if (!metadata) continue; // Note was deleted from SQLite after Typesense indexed it
+
+    results.push({
+      noteId: tsResult.id,
+      type: metadata.type,
+      title: metadata.title,
+      status: metadata.status,
+      priority: metadata.priority,
+      due: metadata.due,
+      tags: tagsMap.get(tsResult.id) || [],
+      modified: metadata.modified,
+      score: tsResult.score ?? null,
+      snippet: tsResult.snippet || null,
+    });
+  }
+
+  return {
+    results,
+    total: tsResponse.total,
+    limit: input.limit || 20,
+    offset: input.offset || 0,
+  };
+}
+
+// ─── Main handler ───────────────────────────────────────────────────────────
+
 /**
  * Handle anvil_search request.
+ * Tries Typesense first (if available), falling back to FTS5/QMD.
  * Performs FTS, filter-only, or combined search based on input.
  * Returns paginated SearchResult objects with metadata and tags.
  */
@@ -255,6 +363,22 @@ export async function handleSearch(
         'offset must be non-negative'
       );
     }
+
+    // ── Typesense path (preferred when available) ──
+    if (ctx.typesenseClient) {
+      const tsResult = await searchViaTypesense(ctx.typesenseClient, input, ctx.db.raw);
+      if (!tsResult.search_unavailable) {
+        return {
+          results: tsResult.results,
+          total: tsResult.total,
+          limit: tsResult.limit,
+          offset: tsResult.offset,
+        };
+      }
+      // Typesense unavailable — fall through to legacy path
+    }
+
+    // ── Legacy FTS5 / QMD path (fallback) ──
 
     // Build filter
     const filter = buildQueryFilter(input);

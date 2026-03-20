@@ -4,6 +4,7 @@ export {
   TypesenseSearchClient,
   buildFilterBy,
   COLLECTION_SCHEMA,
+  COLLECTION_NAME_DEFAULT,
   type TypesenseClientConfig,
   type TypesenseSearchQuery,
   type TypesenseSearchResult,
@@ -16,4 +17,5 @@ export {
   indexNote,
   deindexNote,
   fullReindex,
+  toEpochMs,
 } from './typesense-indexer.js';
