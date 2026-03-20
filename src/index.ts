@@ -11,6 +11,8 @@ import { startStdio } from './mcp/transports/stdio.js';
 import { startHttp } from './mcp/transports/http.js';
 import { createTypeWatcher } from './watcher/type-watcher.js';
 import { createSearchEngine } from './core/search/index.js';
+import { TypesenseSearchClient } from './search/index.js';
+import { fullReindex } from './search/index.js';
 import type { ToolContext } from './tools/create-note.js';
 import type { TypeWatcher } from './watcher/type-watcher.js';
 
@@ -65,12 +67,31 @@ async function main(): Promise<void> {
   });
   process.stderr.write(JSON.stringify({ level: 'info', message: `Search engine: ${searchMode}`, timestamp: new Date().toISOString() }) + '\n');
 
+  // Initialize Typesense search client
+  const typesenseClient = new TypesenseSearchClient({
+    host: process.env.TYPESENSE_HOST ?? 'localhost',
+    port: parseInt(process.env.TYPESENSE_PORT ?? '8108', 10),
+    apiKey: process.env.TYPESENSE_API_KEY ?? 'horus-local-key',
+  });
+
+  // Health check Typesense
+  const tsHealthy = await typesenseClient.isHealthy();
+  process.stderr.write(JSON.stringify({ level: 'info', message: `Typesense health: ${tsHealthy ? 'ok' : 'unavailable'}`, timestamp: new Date().toISOString() }) + '\n');
+
+  // Non-blocking full reindex on startup
+  if (tsHealthy) {
+    fullReindex(typesenseClient, db.raw).catch((err) => {
+      process.stderr.write(JSON.stringify({ level: 'warn', message: `Typesense full reindex failed: ${err instanceof Error ? err.message : String(err)}`, timestamp: new Date().toISOString() }) + '\n');
+    });
+  }
+
   // Create tool context
   const ctx: ToolContext = {
     vaultPath: config.vault_path,
     registry,
     db,
     searchEngine,
+    typesenseClient: tsHealthy ? typesenseClient : undefined,
   };
 
   // Set up type watcher for hot reload
