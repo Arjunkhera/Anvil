@@ -17,59 +17,28 @@ import {
 import { toEpochMs } from '../search/typesense-indexer.js';
 
 /**
- * Resolve semantic search results to database note IDs.
- *
- * QMD returns file paths as `noteId` (via normalizeResults). We look them up
- * in `notes.file_path`. Handles both relative paths (stored in DB) and absolute
- * paths (QMD may return absolute) by stripping the vault prefix when needed.
- *
- * Results that cannot be resolved are dropped.
+ * Validate that search results reference existing notes in the database.
+ * FTS5 returns note UUIDs directly from the DB join, so results should
+ * always resolve. Any that don't are dropped as stale.
  */
-function resolveSemanticNoteIds(
+function validateSearchNoteIds(
   db: AnvilDb,
-  results: Array<{ noteId: string; score: number; snippet: string }>,
-  vaultPath: string
+  results: Array<{ noteId: string; score: number; snippet: string }>
 ): Array<{ noteId: string; score: number; snippet: string }> {
   if (results.length === 0) return [];
 
   const resolved: Array<{ noteId: string; score: number; snippet: string }> = [];
-  const vaultPrefix = vaultPath.endsWith('/') ? vaultPath : vaultPath + '/';
 
   for (const r of results) {
     if (!r.noteId) continue;
 
-    // 1. Try exact match (covers relative path stored in DB)
-    let row = db.getOne<{ note_id: string }>(
-      'SELECT note_id FROM notes WHERE file_path = ?',
-      [r.noteId]
-    );
-    if (row) {
-      resolved.push({ ...r, noteId: row.note_id });
-      continue;
-    }
-
-    // 2. Try stripping vault prefix (covers absolute paths from QMD)
-    if (r.noteId.startsWith(vaultPrefix)) {
-      const relative = r.noteId.slice(vaultPrefix.length);
-      row = db.getOne<{ note_id: string }>(
-        'SELECT note_id FROM notes WHERE file_path = ?',
-        [relative]
-      );
-      if (row) {
-        resolved.push({ ...r, noteId: row.note_id });
-        continue;
-      }
-    }
-
-    // 3. Try as a UUID directly (in case QMD was somehow given UUIDs as docids)
-    row = db.getOne<{ note_id: string }>(
+    const row = db.getOne<{ note_id: string }>(
       'SELECT note_id FROM notes WHERE note_id = ?',
       [r.noteId]
     );
     if (row) {
       resolved.push(r);
     }
-    // Otherwise drop — can't resolve to a known note
   }
 
   return resolved;
@@ -338,7 +307,7 @@ export async function searchViaTypesense(
 
 /**
  * Handle anvil_search request.
- * Tries Typesense first (if available), falling back to FTS5/QMD.
+ * Tries Typesense first (if available), falling back to FTS5.
  * Performs FTS, filter-only, or combined search based on input.
  * Returns paginated SearchResult objects with metadata and tags.
  */
@@ -378,7 +347,7 @@ export async function handleSearch(
       // Typesense unavailable — fall through to legacy path
     }
 
-    // ── Legacy FTS5 / QMD path (fallback) ──
+    // ── FTS5 fallback path ──
 
     // Build filter
     const filter = buildQueryFilter(input);
@@ -387,20 +356,20 @@ export async function handleSearch(
     let searchResults: Array<{ noteId: string; score?: number; snippet?: string }> = [];
     let total = 0;
 
-    // Case 1: Query + Filters → semantic search candidates filtered by structured criteria
+    // Case 1: Query + Filters → FTS search candidates filtered by structured criteria
     if (input.query && hasActiveFilters) {
       if (ctx.searchEngine) {
         try {
           // Fetch more candidates than needed to allow for filter attrition
           const rawResults = await ctx.searchEngine.query(input.query, { limit: limit * 5 });
-          const resolved = resolveSemanticNoteIds(ctx.db.raw, rawResults, ctx.vaultPath);
+          const resolved = validateSearchNoteIds(ctx.db.raw, rawResults);
           const filteredIds = filterNoteIds(ctx.db.raw, resolved.map((r) => r.noteId), filter);
           const filteredSet = new Set(filteredIds);
           const filtered = resolved.filter((r) => filteredSet.has(r.noteId));
           total = filtered.length;
           searchResults = filtered.slice(offset, offset + limit);
         } catch {
-          // Semantic search failed — fall back to FTS combined search
+          // FTS engine query failed — fall back to combined search
           const combined = combinedSearch(ctx.db.raw, input.query, filter, limit, offset);
           searchResults = combined.results;
           total = combined.total;
@@ -415,16 +384,16 @@ export async function handleSearch(
         total = combined.total;
       }
     }
-    // Case 2: Query only → semantic search (or FTS fallback)
+    // Case 2: Query only → FTS search
     else if (input.query && !hasActiveFilters) {
       if (ctx.searchEngine) {
         try {
           const rawResults = await ctx.searchEngine.query(input.query, { limit, offset });
-          const resolved = resolveSemanticNoteIds(ctx.db.raw, rawResults, ctx.vaultPath);
+          const resolved = validateSearchNoteIds(ctx.db.raw, rawResults);
           searchResults = resolved;
           total = resolved.length < limit ? offset + resolved.length : offset + limit;
         } catch {
-          // Semantic search failed — fall back to FTS
+          // FTS engine query failed — fall back to direct FTS
           const ftsResults = searchFts(ctx.db.raw, input.query, limit, offset);
           searchResults = ftsResults;
           total = ftsResults.length < limit
